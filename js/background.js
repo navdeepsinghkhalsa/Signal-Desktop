@@ -14,7 +14,7 @@
 ;(function() {
     'use strict';
 
-    const { IdleDetector } = Signal;
+    const { IdleDetector, MessageMigration } = Signal;
     const { Errors, Message } = window.Signal.Types;
     const { context: migrationsContext } = window.Signal.Migrations;
     const upgradeMessageSchema = message =>
