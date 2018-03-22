@@ -113,13 +113,13 @@
   const readAttachmentData = Attachments.readData(attachmentsPath);
   const writeAttachmentData = Attachments.writeData(attachmentsPath);
 
-  window.Signal = window.Signal || {};
+  window.Signal = {};
   window.Signal.Logs = require('./js/modules/logs');
   window.Signal.OS = require('./js/modules/os');
   window.Signal.Backup = require('./js/modules/backup');
   window.Signal.Crypto = require('./js/modules/crypto');
 
-  window.Signal.Migrations = window.Signal.Migrations || {};
+  window.Signal.Migrations = {};
   // Injected context functions to keep `Message` agnostic from Electron:
   window.Signal.Migrations.context = {
     deleteAttachmentData,
@@ -128,7 +128,7 @@
   };
   window.Signal.Migrations.V17 = require('./js/modules/migrations/17');
 
-  window.Signal.Types = window.Signal.Types || {};
+  window.Signal.Types = {};
   window.Signal.Types.Attachment = require('./js/modules/types/attachment');
   window.Signal.Types.Errors = require('./js/modules/types/errors');
   window.Signal.Types.Message = require('./js/modules/types/message');
