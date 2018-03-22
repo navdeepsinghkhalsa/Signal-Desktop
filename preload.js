@@ -134,6 +134,8 @@
   window.Signal.Types.Message = require('./js/modules/types/message');
   window.Signal.Types.MIME = require('./js/modules/types/mime');
   window.Signal.Types.Settings = require('./js/modules/types/settings');
+  window.Signal.Views = {};
+  window.Signal.Views.Initialization = require('./js/modules/views/initialization');
 
   // We pull this in last, because the native module involved appears to be sensitive to
   //   /tmp mounted as noexec on Linux.
