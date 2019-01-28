@@ -1,10 +1,12 @@
 /* eslint-env node */
+/* global window */
 
 const FormData = require('form-data');
 const got = require('got');
 
-
 const BASE_URL = 'https://debuglogs.org';
+const VERSION = window.getVersion();
+const USER_AGENT = `Signal Desktop ${VERSION}`;
 
 // Workaround: Submitting `FormData` using native `FormData::submit` procedure
 // as integration with `got` results in S3 error saying we haven’t set the
@@ -12,9 +14,16 @@ const BASE_URL = 'https://debuglogs.org';
 // https://github.com/sindresorhus/got/pull/466
 const submitFormData = (form, url) =>
   new Promise((resolve, reject) => {
-    form.submit(url, (error) => {
+    form.submit(url, (error, response) => {
       if (error) {
         return reject(error);
+      }
+
+      const { statusCode } = response;
+      if (statusCode !== 204) {
+        return reject(
+          new Error(`Failed to upload to S3, got status ${statusCode}`)
+        );
       }
 
       return resolve();
@@ -22,8 +31,16 @@ const submitFormData = (form, url) =>
   });
 
 //      upload :: String -> Promise URL
-exports.upload = async (content) => {
-  const signedForm = await got.get(BASE_URL, { json: true });
+exports.upload = async content => {
+  const signedForm = await got.get(BASE_URL, {
+    json: true,
+    headers: {
+      'user-agent': USER_AGENT,
+    },
+  });
+  if (!signedForm.body) {
+    throw new Error('Failed to retrieve token');
+  }
   const { fields, url } = signedForm.body;
 
   const form = new FormData();
@@ -40,7 +57,7 @@ exports.upload = async (content) => {
   form.append('Content-Type', contentType);
   form.append('file', contentBuffer, {
     contentType,
-    filename: 'signal-desktop-debug-log.txt',
+    filename: `signal-desktop-debug-log-${VERSION}.txt`,
   });
 
   // WORKAROUND: See comment on `submitFormData`:

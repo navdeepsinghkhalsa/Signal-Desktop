@@ -1,25 +1,28 @@
-/*
- * vim: ts=4:sw=4:expandtab
- */
-(function () {
-    'use strict';
-    Whisper.Registration = {
-        markEverDone: function() {
-            storage.put('chromiumRegistrationDoneEver', '');
-        },
-        markDone: function () {
-            this.markEverDone();
-            storage.put('chromiumRegistrationDone', '');
-        },
-        isDone: function () {
-            return storage.get('chromiumRegistrationDone') === '';
-        },
-        everDone: function() {
-            return storage.get('chromiumRegistrationDoneEver') === '' ||
-                   storage.get('chromiumRegistrationDone') === '';
-        },
-        remove: function() {
-            storage.remove('chromiumRegistrationDone');
-        }
-    };
-}());
+/* global storage, Whisper */
+
+// eslint-disable-next-line func-names
+(function() {
+  'use strict';
+
+  Whisper.Registration = {
+    markEverDone() {
+      storage.put('chromiumRegistrationDoneEver', '');
+    },
+    markDone() {
+      this.markEverDone();
+      storage.put('chromiumRegistrationDone', '');
+    },
+    isDone() {
+      return storage.get('chromiumRegistrationDone') === '';
+    },
+    everDone() {
+      return (
+        storage.get('chromiumRegistrationDoneEver') === '' ||
+        storage.get('chromiumRegistrationDone') === ''
+      );
+    },
+    remove() {
+      storage.remove('chromiumRegistrationDone');
+    },
+  };
+})();

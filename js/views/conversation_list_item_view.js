@@ -1,73 +1,51 @@
-/*
- * vim: ts=4:sw=4:expandtab
- */
-(function () {
-    'use strict';
-    window.Whisper = window.Whisper || {};
+/* global Whisper, Signal, Backbone */
 
-    // list of conversations, showing user/group and last message sent
-    Whisper.ConversationListItemView = Whisper.View.extend({
-        tagName: 'div',
-        className: function() {
-            return 'conversation-list-item contact ' + this.model.cid;
-        },
-        templateName: 'conversation-preview',
-        events: {
-            'click': 'select'
-        },
-        initialize: function() {
-            // auto update
-            this.listenTo(this.model, 'change', _.debounce(this.render.bind(this), 1000));
-            this.listenTo(this.model, 'destroy', this.remove); // auto update
-            this.listenTo(this.model, 'opened', this.markSelected); // auto update
+// eslint-disable-next-line func-names
+(function() {
+  'use strict';
 
-            var updateLastMessage = _.debounce(this.model.updateLastMessage.bind(this.model), 1000);
-            this.listenTo(this.model.messageCollection, 'add remove', updateLastMessage);
-            this.listenTo(this.model, 'newmessage', updateLastMessage);
+  window.Whisper = window.Whisper || {};
 
-            extension.windows.onClosed(function() {
-              this.stopListening();
-            }.bind(this));
-            this.timeStampView = new Whisper.TimestampView({brief: true});
-            this.model.updateLastMessage();
-        },
+  // list of conversations, showing user/group and last message sent
+  Whisper.ConversationListItemView = Whisper.View.extend({
+    tagName: 'div',
+    className() {
+      return `conversation-list-item contact ${this.model.cid}`;
+    },
+    templateName: 'conversation-preview',
+    initialize() {
+      this.listenTo(this.model, 'destroy', this.remove);
+    },
 
-        markSelected: function() {
-            this.$el.addClass('selected').siblings('.selected').removeClass('selected');
-        },
+    remove() {
+      if (this.childView) {
+        this.childView.remove();
+        this.childView = null;
+      }
+      Backbone.View.prototype.remove.call(this);
+    },
 
-        select: function(e) {
-            this.markSelected();
-            this.$el.trigger('select', this.model);
-        },
+    render() {
+      if (this.childView) {
+        this.childView.remove();
+        this.childView = null;
+      }
 
-        render: function() {
-            this.$el.html(
-                Mustache.render(_.result(this,'template', ''), {
-                    title: this.model.getTitle(),
-                    last_message: this.model.get('lastMessage'),
-                    last_message_timestamp: this.model.get('timestamp'),
-                    number: this.model.getNumber(),
-                    avatar: this.model.getAvatar(),
-                    profileName: this.model.getProfileName(),
-                    unreadCount: this.model.get('unreadCount')
-                }, this.render_partials())
-            );
-            this.timeStampView.setElement(this.$('.last-timestamp'));
-            this.timeStampView.update();
+      const props = this.model.getPropsForListItem();
+      this.childView = new Whisper.ReactWrapperView({
+        className: 'list-item-wrapper',
+        Component: Signal.Components.ConversationListItem,
+        props,
+      });
 
-            emoji_util.parse(this.$('.name'));
-            emoji_util.parse(this.$('.last-message'));
+      const update = () =>
+        this.childView.update(this.model.getPropsForListItem());
 
-            var unread = this.model.get('unreadCount');
-            if (unread > 0) {
-                this.$el.addClass('unread');
-            } else {
-                this.$el.removeClass('unread');
-            }
+      this.listenTo(this.model, 'change', update);
 
-            return this;
-        }
+      this.$el.append(this.childView.el);
 
-    });
+      return this;
+    },
+  });
 })();

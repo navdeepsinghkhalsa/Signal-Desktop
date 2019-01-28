@@ -1,27 +1,27 @@
-/*
- * vim: ts=4:sw=4:expandtab
- */
+/* global Whisper */
 
-;(function () {
-    'use strict';
-    window.Whisper = window.Whisper || {};
+// eslint-disable-next-line func-names
+(function() {
+  'use strict';
 
-    var lastTime;
-    var interval = 1000;
-    var events;
-    function checkTime() {
-      var currentTime = Date.now();
-      if (currentTime > (lastTime + interval * 2)) {
-          events.trigger('timetravel');
-      }
-      lastTime = currentTime;
+  window.Whisper = window.Whisper || {};
+
+  let lastTime;
+  const interval = 1000;
+  let events;
+  function checkTime() {
+    const currentTime = Date.now();
+    if (currentTime > lastTime + interval * 2) {
+      events.trigger('timetravel');
     }
+    lastTime = currentTime;
+  }
 
-    Whisper.WallClockListener = {
-      init: function(_events) {
-          events = _events;
-          lastTime = Date.now();
-          setInterval(checkTime, interval);
-      }
-    };
-}());
+  Whisper.WallClockListener = {
+    init(_events) {
+      events = _events;
+      lastTime = Date.now();
+      setInterval(checkTime, interval);
+    },
+  };
+})();

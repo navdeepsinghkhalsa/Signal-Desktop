@@ -3,13 +3,12 @@
 /* global Whisper: false */
 
 // eslint-disable-next-line func-names
-(function () {
+(function() {
   'use strict';
 
   window.Whisper = window.Whisper || {};
 
-  const isSearchable = conversation =>
-    conversation.isSearchable();
+  const isSearchable = conversation => conversation.isSearchable();
 
   Whisper.NewContactView = Whisper.View.extend({
     templateName: 'new-contact',
@@ -43,15 +42,22 @@
       this.$new_contact = this.$('.new-contact');
 
       this.typeahead = new Whisper.ConversationCollection();
+      this.collection = new Whisper.ConversationCollection([], {
+        comparator(m) {
+          return m.getTitle().toLowerCase();
+        },
+      });
+      this.listenTo(this.collection, 'select', conversation => {
+        this.resetTypeahead();
+        this.trigger('open', conversation);
+      });
+
       // View to display the matched contacts from typeahead
       this.typeahead_view = new Whisper.ConversationListView({
-        collection: new Whisper.ConversationCollection([], {
-          comparator(m) { return m.getTitle().toLowerCase(); },
-        }),
+        collection: this.collection,
       });
       this.$el.append(this.typeahead_view.el);
       this.initNewContact();
-      // this.listenTo(this.collection, 'reset', this.filterContacts);
       this.pending = Promise.resolve();
     },
 
@@ -75,8 +81,11 @@
         /* eslint-disable more/no-then */
         this.pending = this.pending.then(() =>
           this.typeahead.search(query).then(() => {
-            this.typeahead_view.collection.reset(this.typeahead.filter(isSearchable));
-          }));
+            this.typeahead_view.collection.reset(
+              this.typeahead.filter(isSearchable)
+            );
+          })
+        );
         /* eslint-enable more/no-then */
         this.trigger('show');
       } else {
@@ -89,32 +98,29 @@
         this.new_contact_view.undelegateEvents();
         this.new_contact_view.$el.hide();
       }
-      // Creates a view to display a new contact
+      const model = new Whisper.Conversation({ type: 'private' });
       this.new_contact_view = new Whisper.NewContactView({
         el: this.$new_contact,
-        model: ConversationController.createTemporary({
-          type: 'private',
-        }),
+        model,
       }).render();
     },
 
-    createConversation() {
-      if (this.new_contact_view.model.isValid()) {
-        // NOTE: Temporarily allow `then` until we convert the entire file
-        // to `async` / `await`:
-        // eslint-disable-next-line more/no-then
-        ConversationController.getOrCreateAndWait(
-          this.new_contact_view.model.id,
-          'private'
-        ).then((conversation) => {
-          this.trigger('open', conversation);
-          this.initNewContact();
-          this.resetTypeahead();
-        });
-      } else {
+    async createConversation() {
+      const isValidNumber = this.new_contact_view.model.isValid();
+      if (!isValidNumber) {
         this.new_contact_view.$('.number').text(i18n('invalidNumberError'));
         this.$input.focus();
+        return;
       }
+
+      const newConversationId = this.new_contact_view.model.id;
+      const conversation = await ConversationController.getOrCreateAndWait(
+        newConversationId,
+        'private'
+      );
+      this.trigger('open', conversation);
+      this.initNewContact();
+      this.resetTypeahead();
     },
 
     reset() {
@@ -128,22 +134,8 @@
       this.hideHints();
       this.new_contact_view.$el.hide();
       this.$input.val('').focus();
-      if (this.showAllContacts) {
-        // NOTE: Temporarily allow `then` until we convert the entire file
-        // to `async` / `await`:
-        // eslint-disable-next-line more/no-then
-        this.typeahead.fetchAlphabetical().then(() => {
-          if (this.typeahead.length > 0) {
-            this.typeahead_view.collection.reset(this.typeahead.filter(isSearchable));
-          } else {
-            this.showHints();
-          }
-        });
-        this.trigger('show');
-      } else {
-        this.typeahead_view.collection.reset([]);
-        this.trigger('hide');
-      }
+      this.typeahead_view.collection.reset([]);
+      this.trigger('hide');
     },
 
     showHints() {
@@ -168,4 +160,4 @@
       return number.replace(/[\s-.()]*/g, '').match(/^\+?[0-9]*$/);
     },
   });
-}());
+})();

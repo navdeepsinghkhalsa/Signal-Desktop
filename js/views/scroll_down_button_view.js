@@ -1,39 +1,39 @@
-/*
- * vim: ts=4:sw=4:expandtab
- */
-(function () {
-    'use strict';
-    window.Whisper = window.Whisper || {};
+/* global Whisper, i18n */
 
-    Whisper.ScrollDownButtonView = Whisper.View.extend({
-        className: 'scroll-down-button-view',
-        templateName: 'scroll-down-button-view',
+// eslint-disable-next-line func-names
+(function() {
+  'use strict';
 
-        initialize: function(options) {
-          options = options || {};
-          this.count = options.count || 0;
-        },
+  window.Whisper = window.Whisper || {};
 
-        increment: function(count) {
-            count = count || 0;
-            this.count += count;
-            this.render();
-        },
+  Whisper.ScrollDownButtonView = Whisper.View.extend({
+    className: 'module-scroll-down',
+    templateName: 'scroll-down-button-view',
 
-        render_attributes: function() {
-            var cssClass = this.count > 0 ? 'new-messages' : '';
+    initialize(options = {}) {
+      this.count = options.count || 0;
+    },
 
-            var moreBelow = i18n('scrollDown');
-            if (this.count > 1) {
-                moreBelow = i18n('messagesBelow');
-            } else if (this.count === 1) {
-                moreBelow = i18n('messageBelow');
-            }
+    increment(count = 0) {
+      this.count += count;
+      this.render();
+    },
 
-            return {
-                cssClass: cssClass,
-                moreBelow: moreBelow
-            };
-        }
-    });
+    render_attributes() {
+      const buttonClass =
+        this.count > 0 ? 'module-scroll-down__button--new-messages' : '';
+
+      let moreBelow = i18n('scrollDown');
+      if (this.count > 1) {
+        moreBelow = i18n('messagesBelow');
+      } else if (this.count === 1) {
+        moreBelow = i18n('messageBelow');
+      }
+
+      return {
+        buttonClass,
+        moreBelow,
+      };
+    },
+  });
 })();

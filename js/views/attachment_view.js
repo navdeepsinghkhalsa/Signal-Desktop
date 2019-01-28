@@ -1,17 +1,15 @@
 /* global $: false */
 /* global _: false */
 /* global Backbone: false */
-/* global moment: false */
+/* global filesize: false */
 
 /* global i18n: false */
-/* global textsecure: false */
+/* global Signal: false */
 /* global Whisper: false */
 
 // eslint-disable-next-line func-names
-(function () {
+(function() {
   'use strict';
-
-  const ESCAPE_KEY_CODE = 27;
 
   const FileView = Whisper.View.extend({
     tagName: 'div',
@@ -63,13 +61,10 @@
   const VideoView = MediaView.extend({ tagName: 'video' });
 
   // Blacklist common file types known to be unsupported in Chrome
-  const UnsupportedFileTypes = [
-    'audio/aiff',
-    'video/quicktime',
-  ];
+  const unsupportedFileTypes = ['audio/aiff', 'video/quicktime'];
 
   Whisper.AttachmentView = Backbone.View.extend({
-    tagName: 'span',
+    tagName: 'div',
     className() {
       if (this.isImage()) {
         return 'attachment';
@@ -86,13 +81,13 @@
       }
     },
     events: {
-      click: 'onclick',
+      click: 'onClick',
     },
     unload() {
       this.blob = null;
 
-      if (this.lightBoxView) {
-        this.lightBoxView.remove();
+      if (this.lightboxView) {
+        this.lightboxView.remove();
       }
       if (this.fileView) {
         this.fileView.remove();
@@ -103,44 +98,40 @@
 
       this.remove();
     },
-    getFileType() {
-      switch (this.model.contentType) {
-        case 'video/quicktime': return 'mov';
-        default: return this.model.contentType.split('/')[1];
-      }
-    },
-    onclick() {
-      if (this.isImage()) {
-        this.lightBoxView = new Whisper.LightboxView({ model: this });
-        this.lightBoxView.render();
-        this.lightBoxView.$el.appendTo(this.el);
-        this.lightBoxView.$el.trigger('show');
-      } else {
+    onClick() {
+      if (!this.isImage()) {
         this.saveFile();
+        return;
       }
+
+      const props = {
+        objectURL: this.objectUrl,
+        contentType: this.model.contentType,
+        onSave: () => this.saveFile(),
+        // implicit: `close`
+      };
+      this.lightboxView = new Whisper.ReactWrapperView({
+        Component: Signal.Components.Lightbox,
+        props,
+        onClose: () => Signal.Backbone.Views.Lightbox.hide(),
+      });
+      Signal.Backbone.Views.Lightbox.show(this.lightboxView.el);
     },
     isVoiceMessage() {
-      // eslint-disable-next-line no-bitwise
-      if (this.model.flags & textsecure.protobuf.AttachmentPointer.Flags.VOICE_MESSAGE) {
-        return true;
-      }
-
-      // Support for android legacy voice messages
-      if (this.isAudio() && this.model.fileName === null) {
-        return true;
-      }
-
-      return false;
+      return Signal.Types.Attachment.isVoiceMessage(this.model);
     },
     isAudio() {
-      return this.model.contentType.startsWith('audio/');
+      const { contentType } = this.model;
+      // TODO: Implement and use `Signal.Util.GoogleChrome.isAudioTypeSupported`:
+      return Signal.Types.MIME.isAudio(contentType);
     },
     isVideo() {
-      return this.model.contentType.startsWith('video/');
+      const { contentType } = this.model;
+      return Signal.Util.GoogleChrome.isVideoTypeSupported(contentType);
     },
     isImage() {
-      const type = this.model.contentType;
-      return type.startsWith('image/') && type !== 'image/tiff';
+      const { contentType } = this.model;
+      return Signal.Util.GoogleChrome.isImageTypeSupported(contentType);
     },
     mediaType() {
       if (this.isVoiceMessage()) {
@@ -171,26 +162,13 @@
 
       return i18n('unnamedFile');
     },
-    suggestedName() {
-      if (this.model.fileName) {
-        return this.model.fileName;
-      }
-
-      let suggestion = 'signal';
-      if (this.timestamp) {
-        suggestion += moment(this.timestamp).format('-YYYY-MM-DD-HHmmss');
-      }
-      const fileType = this.getFileType();
-      if (fileType) {
-        suggestion += `.${fileType}`;
-      }
-      return suggestion;
-    },
     saveFile() {
-      const url = window.URL.createObjectURL(this.blob, { type: 'octet/stream' });
-      const a = $('<a>').attr({ href: url, download: this.suggestedName() });
-      a[0].click();
-      window.URL.revokeObjectURL(url);
+      Signal.Types.Attachment.save({
+        attachment: this.model,
+        document,
+        getAbsolutePath: Signal.Migrations.getAbsoluteAttachmentPath,
+        timestamp: this.timestamp,
+      });
     },
     render() {
       if (!this.isImage()) {
@@ -205,7 +183,7 @@
         View = VideoView;
       }
 
-      if (!View || _.contains(UnsupportedFileTypes, this.model.contentType)) {
+      if (!View || _.contains(unsupportedFileTypes, this.model.contentType)) {
         this.update();
         return this;
       }
@@ -235,7 +213,7 @@
         model: {
           mediaType: this.mediaType(),
           fileName: this.displayName(),
-          fileSize: window.filesize(this.model.size),
+          fileSize: filesize(this.model.size),
           altText: i18n('clickToSave'),
         },
       });
@@ -249,42 +227,4 @@
       this.trigger('update');
     },
   });
-
-  Whisper.LightboxView = Whisper.View.extend({
-    templateName: 'lightbox',
-    className: 'modal lightbox',
-    initialize() {
-      this.window = window;
-      this.$document = $(this.window.document);
-      this.listener = this.onkeyup.bind(this);
-      this.$document.on('keyup', this.listener);
-    },
-    events: {
-      'click .save': 'save',
-      'click .close': 'remove',
-      click: 'onclick',
-    },
-    save() {
-      this.model.saveFile();
-    },
-    onclick(e) {
-      const $el = this.$(e.target);
-      if (!$el.hasClass('image') && !$el.closest('.controls').length) {
-        e.preventDefault();
-        this.remove();
-        return false;
-      }
-
-      return true;
-    },
-    onkeyup(e) {
-      if (e.keyCode === ESCAPE_KEY_CODE) {
-        this.remove();
-        this.$document.off('keyup', this.listener);
-      }
-    },
-    render_attributes() {
-      return { url: this.model.objectUrl };
-    },
-  });
-}());
+})();

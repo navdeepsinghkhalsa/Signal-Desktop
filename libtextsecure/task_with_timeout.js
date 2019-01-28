@@ -1,71 +1,72 @@
-/*
- * vim: ts=4:sw=4:expandtab
- */
-(function () {
-    window.textsecure = window.textsecure || {};
+/* global window */
 
-    window.textsecure.createTaskWithTimeout = function(task, id, options) {
-        options = options || {};
-        options.timeout = options.timeout || (1000 * 60 * 2); // two minutes
+/* eslint-disable more/no-then */
 
-        var errorForStack = new Error('for stack');
-        return function() {
-            return new Promise(function(resolve, reject) {
-                var complete = false;
-                var timer = setTimeout(function() {
-                    if (!complete) {
-                        var message =
-                            (id || '')
-                            + ' task did not complete in time. Calling stack: '
-                            + errorForStack.stack;
+// eslint-disable-next-line func-names
+(function() {
+  window.textsecure = window.textsecure || {};
 
-                        console.log(message);
-                        return reject(new Error(message));
-                    }
-                }.bind(this), options.timeout);
-                var clearTimer = function() {
-                    try {
-                        var localTimer = timer;
-                        if (localTimer) {
-                            timer = null;
-                            clearTimeout(localTimer);
-                        }
-                    }
-                    catch (error) {
-                        console.log(
-                            id || '',
-                            'task ran into problem canceling timer. Calling stack:',
-                            errorForStack.stack
-                        );
-                    }
-                };
+  window.textsecure.createTaskWithTimeout = (task, id, options = {}) => {
+    const timeout = options.timeout || 1000 * 60 * 2; // two minutes
 
-                var success = function(result) {
-                    clearTimer();
-                    complete = true;
-                    return resolve(result);
-                };
-                var failure = function(error) {
-                    clearTimer();
-                    complete = true;
-                    return reject(error);
-                };
+    const errorForStack = new Error('for stack');
+    return () =>
+      new Promise((resolve, reject) => {
+        let complete = false;
+        let timer = setTimeout(() => {
+          if (!complete) {
+            const message = `${id ||
+              ''} task did not complete in time. Calling stack: ${
+              errorForStack.stack
+            }`;
 
-                var promise;
-                try {
-                    promise = task();
-                } catch(error) {
-                    clearTimer();
-                    throw error;
-                }
-                if (!promise || !promise.then) {
-                    clearTimer();
-                    complete = true;
-                    return resolve(promise);
-                }
+            window.log.error(message);
+            return reject(new Error(message));
+          }
 
-                return promise.then(success, failure);
-            });
+          return null;
+        }, timeout);
+        const clearTimer = () => {
+          try {
+            const localTimer = timer;
+            if (localTimer) {
+              timer = null;
+              clearTimeout(localTimer);
+            }
+          } catch (error) {
+            window.log.error(
+              id || '',
+              'task ran into problem canceling timer. Calling stack:',
+              errorForStack.stack
+            );
+          }
         };
-    };
+
+        const success = result => {
+          clearTimer();
+          complete = true;
+          return resolve(result);
+        };
+        const failure = error => {
+          clearTimer();
+          complete = true;
+          return reject(error);
+        };
+
+        let promise;
+        try {
+          promise = task();
+        } catch (error) {
+          clearTimer();
+          throw error;
+        }
+        if (!promise || !promise.then) {
+          clearTimer();
+          complete = true;
+          return resolve(promise);
+        }
+
+        return promise.then(success, failure);
+      });
+  };
 })();

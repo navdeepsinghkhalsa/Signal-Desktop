@@ -1,40 +1,41 @@
-/*
- * vim: ts=4:sw=4:expandtab
- */
-(function () {
-    'use strict';
-    window.Whisper = window.Whisper || {};
+/* global Whisper, i18n */
 
-    // TODO: take a title string which could replace the 'members' header
-    Whisper.GroupMemberList = Whisper.View.extend({
-        className: 'group-member-list panel',
-        templateName: 'group-member-list',
-        initialize: function(options) {
-            this.needVerify = options.needVerify;
+// eslint-disable-next-line func-names
+(function() {
+  'use strict';
 
-            this.render();
+  window.Whisper = window.Whisper || {};
 
-            this.member_list_view = new Whisper.ContactListView({
-                collection: this.model,
-                className: 'members',
-                toInclude: {
-                    listenBack: options.listenBack
-                }
-            });
-            this.member_list_view.render();
+  // TODO: take a title string which could replace the 'members' header
+  Whisper.GroupMemberList = Whisper.View.extend({
+    className: 'group-member-list panel',
+    templateName: 'group-member-list',
+    initialize(options) {
+      this.needVerify = options.needVerify;
 
-            this.$('.container').append(this.member_list_view.el);
+      this.render();
+
+      this.member_list_view = new Whisper.ContactListView({
+        collection: this.model,
+        className: 'members',
+        toInclude: {
+          listenBack: options.listenBack,
         },
-        render_attributes: function() {
-            var summary;
-            if (this.needVerify) {
-                summary = i18n('membersNeedingVerification');
-            }
+      });
+      this.member_list_view.render();
 
-            return {
-                members: i18n('groupMembers'),
-                summary: summary
-            };
-        }
-    });
+      this.$('.container').append(this.member_list_view.el);
+    },
+    render_attributes() {
+      let summary;
+      if (this.needVerify) {
+        summary = i18n('membersNeedingVerification');
+      }
+
+      return {
+        members: i18n('groupMembers'),
+        summary,
+      };
+    },
+  });
 })();

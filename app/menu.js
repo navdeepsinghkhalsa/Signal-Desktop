@@ -1,5 +1,4 @@
-const isString = require('lodash/isString');
-
+const { isString } = require('lodash');
 
 exports.createTemplate = (options, messages) => {
   if (!isString(options.platform)) {
@@ -21,127 +20,144 @@ exports.createTemplate = (options, messages) => {
     showSettings,
   } = options;
 
-  const template = [{
-    label: messages.mainMenuFile.message,
-    submenu: [
-      {
-        label: messages.mainMenuSettings.message,
-        click: showSettings,
-      },
-      {
-        type: 'separator',
-      },
-      {
-        role: 'quit',
-      },
-    ],
-  },
-  {
-    label: messages.mainMenuEdit.message,
-    submenu: [
-      {
-        role: 'undo',
-      },
-      {
-        role: 'redo',
-      },
-      {
-        type: 'separator',
-      },
-      {
-        role: 'cut',
-      },
-      {
-        role: 'copy',
-      },
-      {
-        role: 'paste',
-      },
-      {
-        role: 'pasteandmatchstyle',
-      },
-      {
-        role: 'delete',
-      },
-      {
-        role: 'selectall',
-      },
-    ],
-  },
-  {
-    label: messages.mainMenuView.message,
-    submenu: [
-      {
-        role: 'resetzoom',
-      },
-      {
-        role: 'zoomin',
-      },
-      {
-        role: 'zoomout',
-      },
-      {
-        type: 'separator',
-      },
-      {
-        role: 'togglefullscreen',
-      },
-      {
-        type: 'separator',
-      },
-      {
-        label: messages.debugLog.message,
-        click: showDebugLog,
-      },
-      {
-        type: 'separator',
-      },
-      {
-        role: 'toggledevtools',
-      },
-    ],
-  },
-  {
-    label: messages.mainMenuWindow.message,
-    role: 'window',
-    submenu: [
-      {
-        role: 'minimize',
-      },
-    ],
-  },
-  {
-    label: messages.mainMenuHelp.message,
-    role: 'help',
-    submenu: [
-      {
-        label: messages.goToReleaseNotes.message,
-        click: openReleaseNotes,
-      },
-      {
-        type: 'separator',
-      },
-      {
-        label: messages.goToForums.message,
-        click: openForums,
-      },
-      {
-        label: messages.goToSupportPage.message,
-        click: openSupportPage,
-      },
-      {
-        label: messages.menuReportIssue.message,
-        click: openNewBugForm,
-      },
-      {
-        type: 'separator',
-      },
-      {
-        label: messages.aboutSignalDesktop.message,
-        click: showAbout,
-      },
-    ],
-  }];
+  const template = [
+    {
+      label: messages.mainMenuFile.message,
+      submenu: [
+        {
+          label: messages.mainMenuSettings.message,
+          click: showSettings,
+        },
+        {
+          type: 'separator',
+        },
+        {
+          role: 'quit',
+          label: messages.appMenuQuit.message,
+        },
+      ],
+    },
+    {
+      label: messages.mainMenuEdit.message,
+      submenu: [
+        {
+          role: 'undo',
+          label: messages.editMenuUndo.message,
+        },
+        {
+          role: 'redo',
+          label: messages.editMenuRedo.message,
+        },
+        {
+          type: 'separator',
+        },
+        {
+          role: 'cut',
+          label: messages.editMenuCut.message,
+        },
+        {
+          role: 'copy',
+          label: messages.editMenuCopy.message,
+        },
+        {
+          role: 'paste',
+          label: messages.editMenuPaste.message,
+        },
+        {
+          role: 'pasteandmatchstyle',
+          label: messages.editMenuPasteAndMatchStyle.message,
+        },
+        {
+          role: 'delete',
+          label: messages.editMenuDelete.message,
+        },
+        {
+          role: 'selectall',
+          label: messages.editMenuSelectAll.message,
+        },
+      ],
+    },
+    {
+      label: messages.mainMenuView.message,
+      submenu: [
+        {
+          role: 'resetzoom',
+          label: messages.viewMenuResetZoom.message,
+        },
+        {
+          role: 'zoomin',
+          label: messages.viewMenuZoomIn.message,
+        },
+        {
+          role: 'zoomout',
+          label: messages.viewMenuZoomOut.message,
+        },
+        {
+          type: 'separator',
+        },
+        {
+          role: 'togglefullscreen',
+          label: messages.viewMenuToggleFullScreen.message,
+        },
+        {
+          type: 'separator',
+        },
+        {
+          label: messages.debugLog.message,
+          click: showDebugLog,
+        },
+        {
+          type: 'separator',
+        },
+        {
+          role: 'toggledevtools',
+          label: messages.viewMenuToggleDevTools.message,
+        },
+      ],
+    },
+    {
+      label: messages.mainMenuWindow.message,
+      role: 'window',
+      submenu: [
+        {
+          role: 'minimize',
+          label: messages.windowMenuMinimize.message,
+        },
+      ],
+    },
+    {
+      label: messages.mainMenuHelp.message,
+      role: 'help',
+      submenu: [
+        {
+          label: messages.goToReleaseNotes.message,
+          click: openReleaseNotes,
+        },
+        {
+          type: 'separator',
+        },
+        {
+          label: messages.goToForums.message,
+          click: openForums,
+        },
+        {
+          label: messages.goToSupportPage.message,
+          click: openSupportPage,
+        },
+        {
+          label: messages.menuReportIssue.message,
+          click: openNewBugForm,
+        },
+        {
+          type: 'separator',
+        },
+        {
+          label: messages.aboutSignalDesktop.message,
+          click: showAbout,
+        },
+      ],
+    },
+  ];
 
   if (includeSetup) {
     const fileMenu = template[0];
@@ -238,18 +254,22 @@ function updateForMac(template, messages, options) {
         type: 'separator',
       },
       {
+        label: messages.appMenuHide.message,
         role: 'hide',
       },
       {
+        label: messages.appMenuHideOthers.message,
         role: 'hideothers',
       },
       {
+        label: messages.appMenuUnhide.message,
         role: 'unhide',
       },
       {
         type: 'separator',
       },
       {
+        label: messages.appMenuQuit.message,
         role: 'quit',
       },
     ],
@@ -266,9 +286,11 @@ function updateForMac(template, messages, options) {
       submenu: [
         {
           role: 'startspeaking',
+          label: messages.editMenuStartSpeaking.message,
         },
         {
           role: 'stopspeaking',
+          label: messages.editMenuStopSpeaking.message,
         },
       ],
     }
@@ -279,14 +301,17 @@ function updateForMac(template, messages, options) {
   // eslint-disable-next-line no-param-reassign
   template[windowMenuTemplateIndex].submenu = [
     {
+      label: messages.windowMenuClose.message,
       accelerator: 'CmdOrCtrl+W',
       role: 'close',
     },
     {
+      label: messages.windowMenuMinimize.message,
       accelerator: 'CmdOrCtrl+M',
       role: 'minimize',
     },
     {
+      label: messages.windowMenuZoom.message,
       role: 'zoom',
     },
     {
@@ -298,6 +323,7 @@ function updateForMac(template, messages, options) {
     },
     {
       role: 'front',
+      label: messages.windowMenuBringAllToFront.message,
     },
   ];
 

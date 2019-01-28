@@ -1,31 +1,38 @@
+/* global $, ConversationController, textsecure, Whisper */
+
 'use strict';
 
-describe("Fixtures", function() {
-  before(function(done) {
+describe('Fixtures', () => {
+  before(async () => {
     // NetworkStatusView checks this method every five seconds while showing
-    window.getSocketStatus = function() { return WebSocket.OPEN; };
+    window.getSocketStatus = () => WebSocket.OPEN;
 
-    Whisper.Fixtures.saveAll().then(function() {
-      done();
-    });
+    await clearDatabase();
+    await textsecure.storage.user.setNumberAndDeviceId(
+      '+17015552000',
+      2,
+      'testDevice'
+    );
+
+    await ConversationController.getOrCreateAndWait(
+      textsecure.storage.user.getNumber(),
+      'private'
+    );
   });
 
-  it('renders', function(done) {
+  it('renders', async () => {
+    await Whisper.Fixtures().saveAll();
+
     ConversationController.reset();
-    ConversationController.load().then(function() {
-      var view = new Whisper.InboxView({window: window});
-      view.onEmpty();
-      view.$el.prependTo($('#render-android'));
+    await ConversationController.load();
 
-      var view = new Whisper.InboxView({window: window});
-      view.$el.removeClass('android').addClass('ios');
-      view.onEmpty();
-      view.$el.prependTo($('#render-ios'));
+    let view = new Whisper.InboxView({ window });
+    view.onEmpty();
+    view.$el.prependTo($('#render-light-theme'));
 
-      var view = new Whisper.InboxView({window: window});
-      view.$el.removeClass('android').addClass('android-dark');
-      view.onEmpty();
-      view.$el.prependTo($('#render-android-dark'));
-    }).then(done, done);
+    view = new Whisper.InboxView({ window });
+    view.$el.removeClass('light-theme').addClass('dark-theme');
+    view.onEmpty();
+    view.$el.prependTo($('#render-dark-theme'));
   });
 });

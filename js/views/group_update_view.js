@@ -1,33 +1,32 @@
-/*
- * vim: ts=4:sw=4:expandtab
- */
-(function () {
-    'use strict';
+/* global Backbone, Whisper */
 
-    window.Whisper = window.Whisper || {};
+// eslint-disable-next-line func-names
+(function() {
+  'use strict';
 
-    Whisper.GroupUpdateView = Backbone.View.extend({
-        tagName:   "div",
-        className: "group-update",
-        render: function() {
-            //TODO l10n
-            if (this.model.left) {
-                this.$el.text(this.model.left + ' left the group');
-                return this;
-            }
+  window.Whisper = window.Whisper || {};
 
-            var messages = ['Updated the group.'];
-            if (this.model.name) {
-                messages.push("Title is now '" + this.model.name + "'.");
-            }
-            if (this.model.joined) {
-                messages.push(this.model.joined.join(', ') + ' joined the group');
-            }
+  Whisper.GroupUpdateView = Backbone.View.extend({
+    tagName: 'div',
+    className: 'group-update',
+    render() {
+      // TODO l10n
+      if (this.model.left) {
+        this.$el.text(`${this.model.left} left the group`);
+        return this;
+      }
 
-            this.$el.text(messages.join(' '));
+      const messages = ['Updated the group.'];
+      if (this.model.name) {
+        messages.push(`Title is now '${this.model.name}'.`);
+      }
+      if (this.model.joined) {
+        messages.push(`${this.model.joined.join(', ')} joined the group`);
+      }
 
-            return this;
-        }
-    });
+      this.$el.text(messages.join(' '));
 
+      return this;
+    },
+  });
 })();

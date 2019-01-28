@@ -3,9 +3,11 @@
 /* global getInboxCollection: false */
 /* global i18n: false */
 /* global Whisper: false */
+/* global textsecure: false */
+/* global Signal: false */
 
 // eslint-disable-next-line func-names
-(function () {
+(function() {
   'use strict';
 
   window.Whisper = window.Whisper || {};
@@ -15,9 +17,12 @@
     open(conversation) {
       const id = `conversation-${conversation.cid}`;
       if (id !== this.el.firstChild.id) {
-        this.$el.first().find('video, audio').each(function pauseMedia() {
-          this.pause();
-        });
+        this.$el
+          .first()
+          .find('video, audio')
+          .each(function pauseMedia() {
+            this.pause();
+          });
         let $el = this.$(`#${id}`);
         if ($el === null || $el.length === 0) {
           const view = new Whisper.ConversationView({
@@ -28,8 +33,8 @@
           $el = view.$el;
         }
         $el.prependTo(this.el);
-        conversation.trigger('opened');
       }
+      conversation.trigger('opened');
     },
   });
 
@@ -65,7 +70,6 @@
     },
   });
 
-
   Whisper.AppLoadingScreen = Whisper.View.extend({
     templateName: 'app-loading-screen',
     className: 'app-loading-screen',
@@ -91,6 +95,17 @@
       // eslint-disable-next-line no-new
       new Whisper.FontSizeView({ el: this.$el });
 
+      const ourNumber = textsecure.storage.user.getNumber();
+      const me = ConversationController.getOrCreate(ourNumber, 'private');
+      this.mainHeaderView = new Whisper.ReactWrapperView({
+        className: 'main-header-wrapper',
+        Component: Signal.Components.MainHeader,
+        props: me.format(),
+      });
+      const update = () => this.mainHeaderView.update(me.format());
+      this.listenTo(me, 'change', update);
+      this.$('.main-header-placeholder').append(this.mainHeaderView.el);
+
       this.conversation_stack = new Whisper.ConversationStack({
         el: this.$('.conversation-stack'),
         model: { window: options.window },
@@ -105,9 +120,12 @@
 
       const inboxCollection = getInboxCollection();
 
-      inboxCollection.on('messageError', () => {
-        this.networkStatusView.render();
+      this.listenTo(inboxCollection, 'messageError', () => {
+        if (this.networkStatusView) {
+          this.networkStatusView.render();
+        }
       });
+      this.listenTo(inboxCollection, 'select', this.openConversation);
 
       this.inboxListView = new Whisper.ConversationListView({
         el: this.$('.inbox'),
@@ -140,14 +158,11 @@
         this.searchView.$el.show();
         this.inboxListView.$el.hide();
       });
-      this.listenTo(
-        this.searchView,
-        'open',
-        this.openConversation.bind(this, null)
-      );
+      this.listenTo(this.searchView, 'open', this.openConversation);
 
       this.networkStatusView = new Whisper.NetworkStatusView();
-      this.$el.find('.network-status-container')
+      this.$el
+        .find('.network-status-container')
         .append(this.networkStatusView.render().el);
 
       extension.windows.onClosed(() => {
@@ -170,9 +185,7 @@
       click: 'onClick',
       'click #header': 'focusHeader',
       'click .conversation': 'focusConversation',
-      'select .gutter .conversation-list-item': 'openConversation',
       'input input.search': 'filterContacts',
-      'show .lightbox': 'showLightbox',
     },
     startConnectionListener() {
       this.interval = setInterval(() => {
@@ -193,9 +206,10 @@
             this.onEmpty();
             break;
           default:
-            console.log(
+            window.log.error(
               'Whisper.InboxView::startConnectionListener:',
-              'Unknown web socket status:', status
+              'Unknown web socket status:',
+              status
             );
             break;
         }
@@ -230,13 +244,6 @@
     reloadBackgroundPage() {
       window.location.reload();
     },
-    showSettings() {
-      if (this.$el.find('.settings').length) {
-        return;
-      }
-      const view = new Whisper.SettingsView();
-      view.$el.appendTo(this.el);
-    },
     filterContacts(e) {
       this.searchView.filterContacts(e);
       const input = this.$('input.search');
@@ -252,15 +259,15 @@
         input.removeClass('active');
       }
     },
-    openConversation(e, conversation) {
+    openConversation(conversation) {
       this.searchView.hideHints();
       if (conversation) {
-        this.conversation_stack.open(ConversationController.get(conversation.id));
+        ConversationController.markAsSelected(conversation);
+        this.conversation_stack.open(
+          ConversationController.get(conversation.id)
+        );
         this.focusConversation();
       }
-    },
-    showLightbox(e) {
-      this.$el.append(e.target);
     },
     closeRecording(e) {
       if (e && this.$(e.target).closest('.capture-audio').length > 0) {
@@ -283,4 +290,4 @@
       };
     },
   });
-}());
+})();

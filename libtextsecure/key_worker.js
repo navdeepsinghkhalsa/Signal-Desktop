@@ -1,8 +1,6 @@
-/*
- * vim: ts=4:sw=4:expandtab
- */
+/* global window, postMessage, textsecure, close */
 
-'use strict';
+/* eslint-disable more/no-then, no-global-assign, no-restricted-globals, no-unused-vars */
 
 /*
 *  Load this script in a Web Worker to generate new prekeys without
@@ -25,39 +23,38 @@
                 localStorage.removeItem(e.data.key);
                 break;
             case 'done':
-                console.log(e.data.keys);
+                console.error(e.data.keys);
         }
     };
 */
-var store = {};
+let store = {};
 window.textsecure.storage.impl = {
-    /*****************************
-    *** Override Storage Routines ***
-    *****************************/
-    put: function(key, value) {
-        if (value === undefined)
-            throw new Error("Tried to store undefined");
-        store[key] = value;
-        postMessage({method: 'set', key: key, value: value});
-    },
+  /** ***************************
+   *** Override Storage Routines ***
+   **************************** */
+  put(key, value) {
+    if (value === undefined) throw new Error('Tried to store undefined');
+    store[key] = value;
+    postMessage({ method: 'set', key, value });
+  },
 
-    get: function(key, defaultValue) {
-        if (key in store) {
-            return store[key];
-        } else {
-            return defaultValue;
-        }
-    },
+  get(key, defaultValue) {
+    if (key in store) {
+      return store[key];
+    }
+    return defaultValue;
+  },
 
-    remove: function(key) {
-        delete store[key];
-        postMessage({method: 'remove', key: key});
-    },
+  remove(key) {
+    delete store[key];
+    postMessage({ method: 'remove', key });
+  },
 };
-onmessage = function(e) {
-    store = e.data;
-    textsecure.protocol_wrapper.generateKeys().then(function(keys) {
-        postMessage({method: 'done', keys: keys});
-        close();
-    });
-}
+// eslint-disable-next-line no-undef
+onmessage = e => {
+  store = e.data;
+  textsecure.protocol_wrapper.generateKeys().then(keys => {
+    postMessage({ method: 'done', keys });
+    close();
+  });
+};

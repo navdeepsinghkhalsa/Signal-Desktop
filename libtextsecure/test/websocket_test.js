@@ -1,66 +1,66 @@
-/*
- * vim: ts=4:sw=4:expandtab
- */
+/* global TextSecureWebSocket */
 
-describe('TextSecureWebSocket', function() {
-    var RealWebSocket = window.WebSocket;
-    before(function() { window.WebSocket = MockSocket; });
-    after (function() { window.WebSocket = RealWebSocket;  });
-    it('connects and disconnects', function(done) {
-        var mockServer = new MockServer('ws://localhost:8080');
-        mockServer.on('connection', function(server) {
-            socket.close();
-            server.close();
-            done();
-        });
-        var socket = new TextSecureWebSocket('ws://localhost:8080');
+describe('TextSecureWebSocket', () => {
+  const RealWebSocket = window.WebSocket;
+  before(() => {
+    window.WebSocket = MockSocket;
+  });
+  after(() => {
+    window.WebSocket = RealWebSocket;
+  });
+  it('connects and disconnects', done => {
+    const mockServer = new MockServer('ws://localhost:8080');
+    mockServer.on('connection', server => {
+      socket.close();
+      server.close();
+      done();
     });
+    const socket = new TextSecureWebSocket('ws://localhost:8080');
+  });
 
-    it('sends and receives', function(done) {
-        var mockServer = new MockServer('ws://localhost:8080');
-        mockServer.on('connection', function(server) {
-            server.on('message', function(data) {
-                server.send('ack');
-                server.close();
-            });
-        });
-        var socket = new TextSecureWebSocket('ws://localhost:8080');
-        socket.onmessage = function(response) {
-            assert.strictEqual(response.data, 'ack');
-            socket.close();
-            done();
-        };
-        socket.send('syn');
-
+  it('sends and receives', done => {
+    const mockServer = new MockServer('ws://localhost:8080');
+    mockServer.on('connection', server => {
+      server.on('message', () => {
+        server.send('ack');
+        server.close();
+      });
     });
+    const socket = new TextSecureWebSocket('ws://localhost:8080');
+    socket.onmessage = response => {
+      assert.strictEqual(response.data, 'ack');
+      socket.close();
+      done();
+    };
+    socket.send('syn');
+  });
 
-    it('exposes the socket status', function(done) {
-        var mockServer = new MockServer('ws://localhost:8082');
-        mockServer.on('connection', function(server) {
-            assert.strictEqual(socket.getStatus(), WebSocket.OPEN);
-            server.close();
-            socket.close();
-        });
-        var socket = new TextSecureWebSocket('ws://localhost:8082');
-        socket.onclose = function() {
-            assert.strictEqual(socket.getStatus(), WebSocket.CLOSING);
-            done();
-        };
+  it('exposes the socket status', done => {
+    const mockServer = new MockServer('ws://localhost:8082');
+    mockServer.on('connection', server => {
+      assert.strictEqual(socket.getStatus(), WebSocket.OPEN);
+      server.close();
+      socket.close();
     });
+    const socket = new TextSecureWebSocket('ws://localhost:8082');
+    socket.onclose = () => {
+      assert.strictEqual(socket.getStatus(), WebSocket.CLOSING);
+      done();
+    };
+  });
 
-    it('reconnects', function(done) {
-        this.timeout(60000);
-        var mockServer = new MockServer('ws://localhost:8082');
-        var socket = new TextSecureWebSocket('ws://localhost:8082');
-        socket.onclose = function() {
-            var mockServer = new MockServer('ws://localhost:8082');
-            mockServer.on('connection', function(server) {
-                socket.close();
-                server.close();
-                done();
-            });
-        };
-        mockServer.close();
-    });
-
+  it('reconnects', function thisNeeded(done) {
+    this.timeout(60000);
+    const mockServer = new MockServer('ws://localhost:8082');
+    const socket = new TextSecureWebSocket('ws://localhost:8082');
+    socket.onclose = () => {
+      const secondServer = new MockServer('ws://localhost:8082');
+      secondServer.on('connection', server => {
+        socket.close();
+        server.close();
+        done();
+      });
+    };
+    mockServer.close();
+  });
 });

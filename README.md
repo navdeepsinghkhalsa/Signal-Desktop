@@ -1,51 +1,45 @@
 [![Build Status](https://travis-ci.org/signalapp/Signal-Desktop.svg?branch=master)](https://travis-ci.org/signalapp/Signal-Desktop)
-Signal Desktop
-==========================
+[![Build Status](https://ci.appveyor.com/api/projects/status/github/signalapp/Signal-Desktop?branch=master&svg=true)](https://ci.appveyor.com/project/Signal-Desktop/signal-desktop)
 
-Signal Desktop is an Electron application that links with your
-[Signal Android](https://github.com/signalapp/Signal-Android)
- or [Signal iOS](https://github.com/signalapp/Signal-iOS) app.
+# Signal Desktop
 
-## Install production version: https://signal.org/download/
+Signal Desktop is an Electron application that links with Signal
+on [Android](https://github.com/signalapp/Signal-Android)
+or [iOS](https://github.com/signalapp/Signal-iOS).
+
+## Install the production version: https://signal.org/download/
 
 ## Install the beta
 
-You can install it on a computer which already has the production version installed. It uses different data and install locations.
+You can install the beta version of Signal Desktop alongside the production version. The beta uses different data and install locations.
 
-- _Windows:_ You can find the most recent build here: https://updates.signal.org/desktop/beta.yml
-- _Mac:_ You can find the most recent build here: https://updates.signal.org/desktop/beta-mac.yml
-- _Linux:_ same instructions as the production install steps linked above, but run `apt-get signal-desktop-beta` instead
-
+* _Windows:_ First, download [this file](https://updates.signal.org/desktop/beta.yml) and look for the `url` property that specifies the location for the latest beta installer. Download the installer by constructing a final URL that looks like this: `https://updates.signal.org/desktop/<installer location>`. Then run the installer.
+* _macOS:_ First, download [this file](https://updates.signal.org/desktop/beta-mac.yml) and look for the `url` property that specifies the location for the latest beta installer. Download the installer by constructing a final URL that looks like this: `https://updates.signal.org/desktop/<package location>`. Then unzip that package and copy the `.app` file into the `/Applications` folder using Finder.
+* _Linux:_ Follow the production instructions to set up the APT repository and run `apt install signal-desktop-beta`.
 
 ## Got a question?
 
-You can find answers to a number of frequently asked questions on our support site: https://support.signal.org/.
-The community forum is another good place for questions: https://community.signalusers.org/.
-
+You can find answers to a number of frequently asked questions on our [support site](https://support.signal.org/).
+The [community forum](https://community.signalusers.org/) is another good place for questions.
 
 ## Found a Bug? Have a feature request?
 
-Please search the existing issues for your bug and create a new one if the issue is not yet tracked!
-
-https://github.com/signalapp/Signal-Desktop/issues
-
+Please search for any [existing issues](https://github.com/signalapp/Signal-Desktop/issues) that describe your bug in order to avoid duplicate submissions.
 
 ## Contributing Translations
+
 Interested in helping to translate Signal? Contribute here:
 
 https://www.transifex.com/projects/p/signal-desktop
 
-
 ## Contributing Code
 
 Please see [CONTRIBUTING.md](https://github.com/signalapp/Signal-Desktop/blob/master/CONTRIBUTING.md)
-for setup instructions and contributor guidelines. And don't forget to sign the
-[CLA](https://signal.org/cla/).
-
+for setup instructions and guidelines for new contributors. Don't forget to sign the [CLA](https://signal.org/cla/).
 
 ## Contributing Funds
-You can donate to Signal development through the [Freedom of the Press Foundation](https://freedom.press/crowdfunding/signal/).
 
+You can donate to Signal development through the [Freedom of the Press Foundation](https://freedom.press/crowdfunding/signal/).
 
 ## Cryptography Notice
 
@@ -58,6 +52,6 @@ The form and manner of this distribution makes it eligible for export under the 
 
 ## License
 
-Copyright 2014-2017 Open Whisper Systems
+Copyright 2014-2019 Open Whisper Systems
 
 Licensed under the GPLv3: http://www.gnu.org/licenses/gpl-3.0.html

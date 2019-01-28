@@ -1,36 +1,36 @@
-/*
- * vim: ts=4:sw=4:expandtab
- */
-(function () {
-    'use strict';
-    window.Whisper = window.Whisper || {};
+/* global Whisper, i18n */
 
-    var FIVE_SECONDS = 5 * 1000;
+// eslint-disable-next-line func-names
+(function() {
+  'use strict';
 
-    Whisper.LastSeenIndicatorView = Whisper.View.extend({
-        className: 'last-seen-indicator-view',
-        templateName: 'last-seen-indicator-view',
-        initialize: function(options) {
-          options = options || {};
-          this.count = options.count || 0;
-        },
+  window.Whisper = window.Whisper || {};
 
-        increment: function(count) {
-            this.count += count;
-            this.render();
-        },
+  Whisper.LastSeenIndicatorView = Whisper.View.extend({
+    className: 'module-last-seen-indicator',
+    templateName: 'last-seen-indicator-view',
+    initialize(options = {}) {
+      this.count = options.count || 0;
+    },
 
-        getCount: function() {
-            return this.count;
-        },
+    increment(count) {
+      this.count += count;
+      this.render();
+    },
 
-        render_attributes: function() {
-            var unreadMessages = this.count === 1 ? i18n('unreadMessage')
-              : i18n('unreadMessages', [this.count]);
+    getCount() {
+      return this.count;
+    },
 
-            return {
-              unreadMessages: unreadMessages
-            };
-        }
-    });
+    render_attributes() {
+      const unreadMessages =
+        this.count === 1
+          ? i18n('unreadMessage')
+          : i18n('unreadMessages', [this.count]);
+
+      return {
+        unreadMessages,
+      };
+    },
+  });
 })();

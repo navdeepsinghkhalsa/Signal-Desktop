@@ -1,36 +1,35 @@
-/*
- * vim: ts=4:sw=4:expandtab
- */
+/* global libsignal, textsecure */
 
-'use strict';
+describe('Protocol Wrapper', function thisNeeded() {
+  const store = textsecure.storage.protocol;
+  const identifier = '+5558675309';
 
-describe('Protocol Wrapper', function() {
-    var store = textsecure.storage.protocol;
-    var identifier = '+5558675309';
-    var another_identifier = '+5555590210';
-    var prekeys, identityKey, testKey;
-    this.timeout(5000);
-    before(function(done) {
-        localStorage.clear();
-        libsignal.KeyHelper.generateIdentityKeyPair().then(function(identityKey) {
-            return textsecure.storage.protocol.saveIdentity(identifier, identityKey);
-            }).then(function() {
-              done();
-            });
-    });
-    describe('processPreKey', function() {
-        it('rejects if the identity key changes', function(done) {
-            var address = new libsignal.SignalProtocolAddress(identifier, 1);
-            var builder = new libsignal.SessionBuilder(store, address);
-            return builder.processPreKey({
-                identityKey: textsecure.crypto.getRandomBytes(33),
-                encodedNumber: address.toString()
-            }).then(function() {
-                done(new Error('Allowed to overwrite identity key'));
-            }).catch(function(e) {
-                assert.strictEqual(e.message, 'Identity key changed');
-                done();
-            });
+  this.timeout(5000);
+
+  before(done => {
+    localStorage.clear();
+    libsignal.KeyHelper.generateIdentityKeyPair()
+      .then(key => textsecure.storage.protocol.saveIdentity(identifier, key))
+      .then(() => {
+        done();
+      });
+  });
+
+  describe('processPreKey', () => {
+    it('rejects if the identity key changes', () => {
+      const address = new libsignal.SignalProtocolAddress(identifier, 1);
+      const builder = new libsignal.SessionBuilder(store, address);
+      return builder
+        .processPreKey({
+          identityKey: textsecure.crypto.getRandomBytes(33),
+          encodedNumber: address.toString(),
+        })
+        .then(() => {
+          throw new Error('Allowed to overwrite identity key');
+        })
+        .catch(e => {
+          assert.strictEqual(e.message, 'Identity key changed');
         });
     });
+  });
 });

@@ -1,14 +1,15 @@
-/*
- * vim: ts=4:sw=4:expandtab
- */
-(function () {
-    'use strict';
-    // Browser specific functions for Chrom*
-    window.extension = window.extension || {};
+/* global extension: false */
 
-    extension.windows = {
-        onClosed: function(callback) {
-            window.addEventListener('beforeunload', callback);
-        }
-    };
-}());
+// eslint-disable-next-line func-names
+(function() {
+  'use strict';
+
+  // Browser specific functions for Chrom*
+  window.extension = window.extension || {};
+
+  extension.windows = {
+    onClosed(callback) {
+      window.addEventListener('beforeunload', callback);
+    },
+  };
+})();

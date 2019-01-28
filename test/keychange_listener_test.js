@@ -1,67 +1,78 @@
-describe('KeyChangeListener', function() {
-  var phoneNumberWithKeyChange = '+13016886524';  // nsa
-  var address = new libsignal.SignalProtocolAddress(phoneNumberWithKeyChange, 1);
-  var oldKey = libsignal.crypto.getRandomBytes(33);
-  var newKey = libsignal.crypto.getRandomBytes(33);
-  var store;
+/* global ConversationController, libsignal, SignalProtocolStore, Whisper */
 
-  beforeEach(function() {
+describe('KeyChangeListener', () => {
+  const phoneNumberWithKeyChange = '+13016886524'; // nsa
+  const address = new libsignal.SignalProtocolAddress(
+    phoneNumberWithKeyChange,
+    1
+  );
+  const oldKey = libsignal.crypto.getRandomBytes(33);
+  const newKey = libsignal.crypto.getRandomBytes(33);
+  let store;
+
+  beforeEach(() => {
     store = new SignalProtocolStore();
     Whisper.KeyChangeListener.init(store);
     return store.saveIdentity(address.toString(), oldKey);
   });
 
-  afterEach(function() {
+  afterEach(() => {
     return store.removeIdentityKey(phoneNumberWithKeyChange);
   });
 
-  describe('When we have a conversation with this contact', function() {
-    var convo = new Whisper.Conversation({ id: phoneNumberWithKeyChange, type: 'private'});
-    before(function() {
-      ConversationController.createTemporary(convo);
-      return convo.save();
-    });
-
-    after(function() {
-      convo.destroyMessages();
-      return convo.destroy();
-    });
-
-    it('generates a key change notice in the private conversation with this contact', function(done) {
-      convo.on('newmessage', function() {
-        return convo.fetchMessages().then(function() {
-          var message = convo.messageCollection.at(0);
-          assert.strictEqual(message.get('type'), 'keychange');
-          done();
-        });
+  describe('When we have a conversation with this contact', () => {
+    let convo;
+    before(async () => {
+      convo = ConversationController.dangerouslyCreateAndAdd({
+        id: phoneNumberWithKeyChange,
+        type: 'private',
       });
-      return store.saveIdentity(address.toString(), newKey);
+      await window.Signal.Data.saveConversation(convo.attributes, {
+        Conversation: Whisper.Conversation,
+      });
+    });
+
+    after(async () => {
+      await convo.destroyMessages();
+      await window.Signal.Data.saveConversation(convo.id);
+    });
+
+    it('generates a key change notice in the private conversation with this contact', done => {
+      convo.once('newmessage', async () => {
+        await convo.fetchMessages();
+        const message = convo.messageCollection.at(0);
+        assert.strictEqual(message.get('type'), 'keychange');
+        done();
+      });
+      store.saveIdentity(address.toString(), newKey);
     });
   });
 
-
-  describe('When we have a group with this contact', function() {
-    var convo = new Whisper.Conversation({ id: 'groupId', type: 'group', members: [phoneNumberWithKeyChange] });
-    before(function() {
-      ConversationController.createTemporary(convo);
-      return convo.save();
-    });
-    after(function() {
-      convo.destroyMessages();
-      return convo.destroy();
-    });
-
-    it('generates a key change notice in the group conversation with this contact', function(done) {
-      convo.on('newmessage', function() {
-        return convo.fetchMessages().then(function() {
-          var message = convo.messageCollection.at(0);
-          assert.strictEqual(message.get('type'), 'keychange');
-          done();
-        });
+  describe('When we have a group with this contact', () => {
+    let convo;
+    before(async () => {
+      convo = ConversationController.dangerouslyCreateAndAdd({
+        id: 'groupId',
+        type: 'group',
+        members: [phoneNumberWithKeyChange],
       });
-      return store.saveIdentity(address.toString(), newKey);
+      await window.Signal.Data.saveConversation(convo.attributes, {
+        Conversation: Whisper.Conversation,
+      });
+    });
+    after(async () => {
+      await convo.destroyMessages();
+      await window.Signal.Data.saveConversation(convo.id);
     });
 
+    it('generates a key change notice in the group conversation with this contact', done => {
+      convo.once('newmessage', async () => {
+        await convo.fetchMessages();
+        const message = convo.messageCollection.at(0);
+        assert.strictEqual(message.get('type'), 'keychange');
+        done();
+      });
+      store.saveIdentity(address.toString(), newKey);
+    });
   });
-
 });

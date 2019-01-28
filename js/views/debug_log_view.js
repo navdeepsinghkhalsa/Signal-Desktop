@@ -2,7 +2,7 @@
 /* global Whisper: false */
 
 // eslint-disable-next-line func-names
-(function () {
+(function() {
   'use strict';
 
   window.Whisper = window.Whisper || {};
@@ -27,7 +27,7 @@
       this.$('textarea').val(i18n('loading'));
 
       // eslint-disable-next-line more/no-then
-      window.log.fetch().then((text) => {
+      window.log.fetch().then(text => {
         this.$('textarea').val(text);
       });
     },
@@ -42,9 +42,8 @@
       close: i18n('gotIt'),
       debugLogExplanation: i18n('debugLogExplanation'),
     },
-    close(e) {
-      e.preventDefault();
-      this.remove();
+    close() {
+      window.closeDebugLog();
     },
     async submit(e) {
       e.preventDefault();
@@ -56,14 +55,25 @@
       this.$('.buttons, textarea').remove();
       this.$('.result').addClass('loading');
 
-      const publishedLogURL = await window.log.publish(text);
-      const view = new Whisper.DebugLogLinkView({
-        url: publishedLogURL,
-        el: this.$('.result'),
-      });
-      this.$('.loading').removeClass('loading');
-      view.render();
-      this.$('.link').focus().select();
+      try {
+        const publishedLogURL = await window.log.publish(text);
+        const view = new Whisper.DebugLogLinkView({
+          url: publishedLogURL,
+          el: this.$('.result'),
+        });
+        this.$('.loading').removeClass('loading');
+        view.render();
+        this.$('.link')
+          .focus()
+          .select();
+      } catch (error) {
+        window.log.error(
+          'DebugLogView error:',
+          error && error.stack ? error.stack : error
+        );
+        this.$('.loading').removeClass('loading');
+        this.$('.result').text(i18n('debugLogError'));
+      }
     },
   });
-}());
+})();

@@ -9,12 +9,15 @@
     background: transparent;
     padding: 0;
     border: none;
+    margin-top: 2px;
 
-    &:focus, &:hover {
-      opacity: 1.0;
+    &:focus,
+    &:hover {
+      opacity: 1;
     }
 
     &:before {
+      margin-top: 4px;
       content: '';
       display: inline-block;
       height: 24px;
@@ -24,7 +27,7 @@
   }
 }
 .recorder {
-  background: $grey_l;
+  background: $color-white;
 
   button {
     float: right;
@@ -35,9 +38,11 @@
     opacity: 0.5;
     text-align: center;
     padding: 0;
+    margin-top: 5px;
 
-    &:focus, &:hover {
-      opacity: 1.0;
+    &:focus,
+    &:hover {
+      opacity: 1;
     }
 
     .icon {
@@ -48,17 +53,21 @@
   }
 
   .finish {
-    background: lighten($green, 20%);
-    border: 1px solid $green;
+    background: lighten($color-core-green, 20%);
+    border: 1px solid $color-core-green;
 
-    .icon { @include color-svg('../images/check.svg', $green); }
+    .icon {
+      @include color-svg('../images/check.svg', $color-core-green);
+    }
   }
 
   .close {
-    background: lighten($red, 20%);
-    border: 1px solid $red;
+    background: lighten($color-core-red, 20%);
+    border: 1px solid $color-core-red;
 
-    .icon { @include color-svg('../images/x.svg', $red); }
+    .icon {
+      @include color-svg('../images/x.svg', $color-core-red);
+    }
   }
 
   .time {
@@ -68,9 +77,15 @@
     padding: 0 10px;
 
     @keyframes pulse {
-      0%   { opacity:0; }
-      50%  { opacity:1; }
-      100%  { opacity:0; }
+      0% {
+        opacity: 0;
+      }
+      50% {
+        opacity: 1;
+      }
+      100% {
+        opacity: 0;
+      }
     }
 
     &::before {

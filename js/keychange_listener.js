@@ -1,28 +1,31 @@
-/*
- * vim: ts=4:sw=4:expandtab
- */
+/* global Whisper, SignalProtocolStore, ConversationController, _ */
 
-;(function () {
-    'use strict';
-    window.Whisper = window.Whisper || {};
+/* eslint-disable more/no-then */
 
-    Whisper.KeyChangeListener = {
-      init: function(signalProtocolStore) {
-        if (!(signalProtocolStore instanceof SignalProtocolStore)) {
-          throw new Error('KeyChangeListener requires a SignalProtocolStore');
-        }
+// eslint-disable-next-line func-names
+(function() {
+  'use strict';
 
-        signalProtocolStore.on('keychange', function(id) {
-          ConversationController.getOrCreateAndWait(id, 'private').then(function(conversation) {
-            conversation.addKeyChange(id);
+  window.Whisper = window.Whisper || {};
 
-            ConversationController.getAllGroupsInvolvingId(id).then(function(groups) {
-              _.forEach(groups, function(group) {
-                group.addKeyChange(id);
-              });
-            });
-          });
-        });
+  Whisper.KeyChangeListener = {
+    init(signalProtocolStore) {
+      if (!(signalProtocolStore instanceof SignalProtocolStore)) {
+        throw new Error('KeyChangeListener requires a SignalProtocolStore');
       }
-    };
-}());
+
+      signalProtocolStore.on('keychange', async id => {
+        const conversation = await ConversationController.getOrCreateAndWait(
+          id,
+          'private'
+        );
+        conversation.addKeyChange(id);
+
+        const groups = await ConversationController.getAllGroupsInvolvingId(id);
+        _.forEach(groups, group => {
+          group.addKeyChange(id);
+        });
+      });
+    },
+  };
+})();
