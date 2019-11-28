@@ -21,11 +21,23 @@
     add(data) {
       return textsecure.storage.protocol.addUnprocessed(data);
     },
-    save(data) {
-      return textsecure.storage.protocol.saveUnprocessed(data);
+    batchAdd(array) {
+      return textsecure.storage.protocol.addMultipleUnprocessed(array);
     },
-    remove(id) {
-      return textsecure.storage.protocol.removeUnprocessed(id);
+    updateAttempts(id, attempts) {
+      return textsecure.storage.protocol.updateUnprocessedAttempts(
+        id,
+        attempts
+      );
+    },
+    addDecryptedData(id, data) {
+      return textsecure.storage.protocol.updateUnprocessedWithData(id, data);
+    },
+    addDecryptedDataToList(array) {
+      return textsecure.storage.protocol.updateUnprocessedsWithData(array);
+    },
+    remove(idOrArray) {
+      return textsecure.storage.protocol.removeUnprocessed(idOrArray);
     },
     removeAll() {
       return textsecure.storage.protocol.removeAllUnprocessed();

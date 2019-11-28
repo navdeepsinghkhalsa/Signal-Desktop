@@ -4,16 +4,20 @@ import {
   isImageTypeSupported,
   isVideoTypeSupported,
 } from '../../util/GoogleChrome';
-import { AttachmentType } from './types';
 import { Image } from './Image';
-import { areAllAttachmentsVisual } from './ImageGrid';
 import { StagedGenericAttachment } from './StagedGenericAttachment';
 import { StagedPlaceholderAttachment } from './StagedPlaceholderAttachment';
-import { Localizer } from '../../types/Util';
+import { LocalizerType } from '../../types/Util';
+import {
+  areAllAttachmentsVisual,
+  AttachmentType,
+  getUrl,
+  isVideoAttachment,
+} from '../../types/Attachment';
 
 interface Props {
   attachments: Array<AttachmentType>;
-  i18n: Localizer;
+  i18n: LocalizerType;
   // onError: () => void;
   onClickAttachment: (attachment: AttachmentType) => void;
   onCloseAttachment: (attachment: AttachmentType) => void;
@@ -46,8 +50,7 @@ export class AttachmentList extends React.Component<Props> {
       <div className="module-attachments">
         {attachments.length > 1 ? (
           <div className="module-attachments__header">
-            <div
-              role="button"
+            <button
               onClick={onClose}
               className="module-attachments__close-button"
             />
@@ -60,9 +63,14 @@ export class AttachmentList extends React.Component<Props> {
               isImageTypeSupported(contentType) ||
               isVideoTypeSupported(contentType)
             ) {
+              const imageKey =
+                getUrl(attachment) || attachment.fileName || index;
+              const clickCallback =
+                attachments.length > 1 ? onClickAttachment : undefined;
+
               return (
                 <Image
-                  key={getUrl(attachment) || attachment.fileName || index}
+                  key={imageKey}
                   alt={i18n('stagedImageAttachment', [
                     getUrl(attachment) || attachment.fileName,
                   ])}
@@ -74,17 +82,21 @@ export class AttachmentList extends React.Component<Props> {
                   width={IMAGE_WIDTH}
                   url={getUrl(attachment)}
                   closeButton={true}
-                  onClick={
-                    attachments.length > 1 ? onClickAttachment : undefined
-                  }
+                  onClick={clickCallback}
                   onClickClose={onCloseAttachment}
+                  onError={() => {
+                    onCloseAttachment(attachment);
+                  }}
                 />
               );
             }
 
+            const genericKey =
+              getUrl(attachment) || attachment.fileName || index;
+
             return (
               <StagedGenericAttachment
-                key={getUrl(attachment) || attachment.fileName || index}
+                key={genericKey}
                 attachment={attachment}
                 i18n={i18n}
                 onClose={onCloseAttachment}
@@ -92,26 +104,13 @@ export class AttachmentList extends React.Component<Props> {
             );
           })}
           {allVisualAttachments ? (
-            <StagedPlaceholderAttachment onClick={onAddAttachment} />
+            <StagedPlaceholderAttachment
+              onClick={onAddAttachment}
+              i18n={i18n}
+            />
           ) : null}
         </div>
       </div>
     );
   }
-}
-
-export function isVideoAttachment(attachment?: AttachmentType) {
-  return (
-    attachment &&
-    attachment.contentType &&
-    isVideoTypeSupported(attachment.contentType)
-  );
-}
-
-function getUrl(attachment: AttachmentType) {
-  if (attachment.screenshot) {
-    return attachment.screenshot.url;
-  }
-
-  return attachment.url;
 }

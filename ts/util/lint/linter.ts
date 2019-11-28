@@ -4,7 +4,7 @@ import { readFileSync } from 'fs';
 import { join, relative } from 'path';
 
 // @ts-ignore
-import glob from 'glob';
+import * as glob from 'glob';
 import { forEach, some, values } from 'lodash';
 
 import { ExceptionType, REASONS, RuleType } from './types';
@@ -50,11 +50,14 @@ const results: Array<ExceptionType> = [];
 
 const excludedFiles = [
   // High-traffic files in our project
+  '^js/models/messages.js',
+  '^js/modules/crypto.js',
   '^js/views/conversation_view.js',
-  '^js/views/file_input_view.js',
+  '^js/background.js',
 
   // Generated files
   '^js/components.js',
+  '^js/curve/',
   '^js/libtextsecure.js',
   '^js/util_worker.js',
   '^libtextsecure/components.js',
@@ -72,11 +75,16 @@ const excludedFiles = [
   '^libtextsecure/test/*',
   '^test/*',
 
+  // Modules we trust
+  '^node_modules/react/*',
+  '^node_modules/react-dom/*',
+
   // Modules used only in test/development scenarios
   '^node_modules/@types/*',
   '^node_modules/ajv/*',
   '^node_modules/amdefine/*',
   '^node_modules/anymatch/*',
+  '^node_modules/app-builder-lib/*',
   '^node_modules/asn1\\.js/*',
   '^node_modules/autoprefixer/*',
   '^node_modules/babel*',
@@ -84,7 +92,10 @@ const excludedFiles = [
   '^node_modules/body-parser/*',
   '^node_modules/bower/*',
   '^node_modules/buble/*',
+  '^node_modules/builder-util/*',
+  '^node_modules/builder-util-runtime/*',
   '^node_modules/chai/*',
+  '^node_modules/catharsis/*',
   '^node_modules/cli-table2/*',
   '^node_modules/codemirror/*',
   '^node_modules/coffee-script/*',
@@ -92,6 +103,7 @@ const excludedFiles = [
   '^node_modules/degenerator/*',
   '^node_modules/detect-port-alt/*',
   '^node_modules/electron-builder/*',
+  '^node_modules/electron-mocha/',
   '^node_modules/electron-icon-maker/*',
   '^node_modules/electron-osx-sign/*',
   '^node_modules/electron-publish/*',
@@ -114,11 +126,13 @@ const excludedFiles = [
   '^node_modules/istanbul*',
   '^node_modules/jimp/*',
   '^node_modules/jquery/*',
+  '^node_modules/jsdoc/*',
   '^node_modules/jss/*',
   '^node_modules/jss-global/*',
   '^node_modules/livereload-js/*',
   '^node_modules/lolex/*',
   '^node_modules/magic-string/*',
+  '^node_modules/markdown-it/*',
   '^node_modules/mocha/*',
   '^node_modules/minimatch/*',
   '^node_modules/nise/*',
@@ -137,6 +151,7 @@ const excludedFiles = [
   '^node_modules/react-styleguidist/*',
   '^node_modules/recast/*',
   '^node_modules/reduce-css-calc/*',
+  '^node_modules/requizzle/*',
   '^node_modules/resolve/*',
   '^node_modules/sass-graph/*',
   '^node_modules/scss-tokenizer/*',
@@ -165,8 +180,10 @@ const excludedFiles = [
   '^node_modules/vm-browserify/*',
   '^node_modules/webdriverio/*',
   '^node_modules/webpack*',
+  '^node_modules/xmlbuilder/*',
   '^node_modules/xmldom/*',
   '^node_modules/xml-parse-from-string/*',
+  '^node_modules/yargs-unparser/',
 ];
 
 function setupRules(allRules: Array<RuleType>) {
@@ -225,6 +242,7 @@ forEach(allSourceFiles, file => {
 
       const exception = exceptionsLookup[exceptionKey];
       if (exception && (!exception.line || exception.line === line)) {
+        // tslint:disable-next-line no-dynamic-delete
         delete exceptionsLookup[exceptionKey];
 
         return;

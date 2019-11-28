@@ -6,38 +6,50 @@ import { MessageBody } from './conversation/MessageBody';
 import { Timestamp } from './conversation/Timestamp';
 import { ContactName } from './conversation/ContactName';
 import { TypingAnimation } from './conversation/TypingAnimation';
+import { cleanId } from './_util';
 
-import { Localizer } from '../types/Util';
+import { LocalizerType } from '../types/Util';
 
-interface Props {
+export type PropsData = {
+  id: string;
   phoneNumber: string;
+  color?: string;
   profileName?: string;
   name?: string;
-  color?: string;
-  conversationType: 'group' | 'direct';
+  type: 'group' | 'direct';
   avatarPath?: string;
+  isMe: boolean;
 
   lastUpdated: number;
   unreadCount: number;
   isSelected: boolean;
 
-  isTyping: boolean;
+  draftPreview?: string;
+  shouldShowDraft?: boolean;
+
+  typingContact?: Object;
   lastMessage?: {
     status: 'sending' | 'sent' | 'delivered' | 'read' | 'error';
     text: string;
   };
+};
 
-  i18n: Localizer;
-  onClick?: () => void;
-}
+type PropsHousekeeping = {
+  i18n: LocalizerType;
+  style?: Object;
+  onClick?: (id: string) => void;
+};
 
-export class ConversationListItem extends React.Component<Props> {
+type Props = PropsData & PropsHousekeeping;
+
+export class ConversationListItem extends React.PureComponent<Props> {
   public renderAvatar() {
     const {
       avatarPath,
       color,
-      conversationType,
+      type,
       i18n,
+      isMe,
       name,
       phoneNumber,
       profileName,
@@ -48,12 +60,13 @@ export class ConversationListItem extends React.Component<Props> {
         <Avatar
           avatarPath={avatarPath}
           color={color}
-          conversationType={conversationType}
+          noteToSelf={isMe}
+          conversationType={type}
           i18n={i18n}
           name={name}
           phoneNumber={phoneNumber}
           profileName={profileName}
-          size={48}
+          size={52}
         />
         {this.renderUnread()}
       </div>
@@ -78,6 +91,7 @@ export class ConversationListItem extends React.Component<Props> {
     const {
       unreadCount,
       i18n,
+      isMe,
       lastUpdated,
       name,
       phoneNumber,
@@ -94,12 +108,15 @@ export class ConversationListItem extends React.Component<Props> {
               : null
           )}
         >
-          <ContactName
-            phoneNumber={phoneNumber}
-            name={name}
-            profileName={profileName}
-            i18n={i18n}
-          />
+          {isMe ? (
+            i18n('noteToSelf')
+          ) : (
+            <ContactName
+              phoneNumber={phoneNumber}
+              name={name}
+              profileName={profileName}
+            />
+          )}
         </div>
         <div
           className={classNames(
@@ -113,6 +130,7 @@ export class ConversationListItem extends React.Component<Props> {
             timestamp={lastUpdated}
             extended={false}
             module="module-conversation-list-item__header__timestamp"
+            withUnread={unreadCount > 0}
             i18n={i18n}
           />
         </div>
@@ -121,11 +139,28 @@ export class ConversationListItem extends React.Component<Props> {
   }
 
   public renderMessage() {
-    const { lastMessage, isTyping, unreadCount, i18n } = this.props;
-
-    if (!lastMessage && !isTyping) {
+    const {
+      draftPreview,
+      i18n,
+      lastMessage,
+      shouldShowDraft,
+      typingContact,
+      unreadCount,
+    } = this.props;
+    if (!lastMessage && !typingContact) {
       return null;
     }
+
+    const showingDraft = shouldShowDraft && draftPreview;
+
+    // Note: instead of re-using showingDraft here we explode it because
+    //   typescript can't tell that draftPreview is truthy otherwise
+    const text =
+      shouldShowDraft && draftPreview
+        ? draftPreview
+        : lastMessage && lastMessage.text
+          ? lastMessage.text
+          : '';
 
     return (
       <div className="module-conversation-list-item__message">
@@ -137,18 +172,25 @@ export class ConversationListItem extends React.Component<Props> {
               : null
           )}
         >
-          {isTyping ? (
+          {typingContact ? (
             <TypingAnimation i18n={i18n} />
           ) : (
-            <MessageBody
-              text={lastMessage && lastMessage.text ? lastMessage.text : ''}
-              disableJumbomoji={true}
-              disableLinks={true}
-              i18n={i18n}
-            />
+            <>
+              {showingDraft ? (
+                <span className="module-conversation-list-item__message__draft-prefix">
+                  {i18n('ConversationListItem--draft-prefix')}
+                </span>
+              ) : null}
+              <MessageBody
+                text={text.split('\n')[0]}
+                disableJumbomoji={true}
+                disableLinks={true}
+                i18n={i18n}
+              />
+            </>
           )}
         </div>
-        {lastMessage && lastMessage.status ? (
+        {!showingDraft && lastMessage && lastMessage.status ? (
           <div
             className={classNames(
               'module-conversation-list-item__message__status-icon',
@@ -163,24 +205,29 @@ export class ConversationListItem extends React.Component<Props> {
   }
 
   public render() {
-    const { unreadCount, onClick, isSelected } = this.props;
+    const { unreadCount, onClick, id, isSelected, style } = this.props;
 
     return (
-      <div
-        role="button"
-        onClick={onClick}
+      <button
+        onClick={() => {
+          if (onClick) {
+            onClick(id);
+          }
+        }}
+        style={style}
         className={classNames(
           'module-conversation-list-item',
           unreadCount > 0 ? 'module-conversation-list-item--has-unread' : null,
           isSelected ? 'module-conversation-list-item--is-selected' : null
         )}
+        data-id={cleanId(id)}
       >
         {this.renderAvatar()}
         <div className="module-conversation-list-item__content">
           {this.renderHeader()}
           {this.renderMessage()}
         </div>
-      </div>
+      </button>
     );
   }
 }

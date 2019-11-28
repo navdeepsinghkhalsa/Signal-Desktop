@@ -14,6 +14,7 @@
     initialize(options) {
       const {
         Component,
+        JSX,
         props,
         onClose,
         tagName,
@@ -28,6 +29,7 @@
 
       this.tagName = tagName;
       this.className = className;
+      this.JSX = JSX;
       this.Component = Component;
       this.onClose = onClose;
       this.onInitialRender = onInitialRender;
@@ -36,10 +38,23 @@
 
       this.hasRendered = false;
     },
-    update(props) {
+    update(props, cb) {
       const updatedProps = this.augmentProps(props);
-      const reactElement = React.createElement(this.Component, updatedProps);
+      const reactElement = this.JSX
+        ? this.JSX
+        : React.createElement(this.Component, updatedProps);
       ReactDOM.render(reactElement, this.el, () => {
+        if (cb) {
+          try {
+            cb();
+          } catch (error) {
+            window.log.error(
+              'ReactWrapperView.update error:',
+              error && error.stack ? error.stack : error
+            );
+          }
+        }
+
         if (this.hasRendered) {
           return;
         }
@@ -53,16 +68,15 @@
     augmentProps(props) {
       return Object.assign({}, props, {
         close: () => {
-          if (this.onClose) {
-            this.onClose();
-            return;
-          }
           this.remove();
         },
         i18n,
       });
     },
     remove() {
+      if (this.onClose) {
+        this.onClose();
+      }
       ReactDOM.unmountComponentAtNode(this.el);
       Backbone.View.prototype.remove.call(this);
     },

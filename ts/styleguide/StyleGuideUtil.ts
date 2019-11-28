@@ -42,6 +42,10 @@ import landscape from '../../fixtures/koushik-chowdavarapu-105425-unsplash.jpg';
 const landscapeObjectUrl = makeObjectUrl(landscape, 'image/png');
 
 // @ts-ignore
+import squareSticker from '../../fixtures/512x515-thumbs-up-lincoln.webp';
+const squareStickerObjectUrl = makeObjectUrl(squareSticker, 'image/webp');
+
+// @ts-ignore
 import landscapeGreen from '../../fixtures/1000x50-green.jpeg';
 const landscapeGreenObjectUrl = makeObjectUrl(landscapeGreen, 'image/jpeg');
 // @ts-ignore
@@ -57,6 +61,16 @@ const landscapeRedObjectUrl = makeObjectUrl(landscapeRed, 'image/png');
 import portraitTeal from '../../fixtures/50x1000-teal.jpeg';
 const portraitTealObjectUrl = makeObjectUrl(portraitTeal, 'image/png');
 
+// @ts-ignore
+import kitten164 from '../../fixtures/kitten-1-64-64.jpg';
+const kitten164ObjectUrl = makeObjectUrl(kitten164, 'image/jpeg');
+// @ts-ignore
+import kitten264 from '../../fixtures/kitten-2-64-64.jpg';
+const kitten264ObjectUrl = makeObjectUrl(kitten264, 'image/jpeg');
+// @ts-ignore
+import kitten364 from '../../fixtures/kitten-3-64-64.jpg';
+const kitten364ObjectUrl = makeObjectUrl(kitten364, 'image/jpeg');
+
 function makeObjectUrl(data: ArrayBuffer, contentType: string): string {
   const blob = new Blob([data], {
     type: contentType,
@@ -66,6 +80,12 @@ function makeObjectUrl(data: ArrayBuffer, contentType: string): string {
 }
 
 export {
+  kitten164,
+  kitten164ObjectUrl,
+  kitten264,
+  kitten264ObjectUrl,
+  kitten364,
+  kitten364ObjectUrl,
   mp3,
   mp3ObjectUrl,
   gif,
@@ -76,6 +96,8 @@ export {
   mp4ObjectUrlV2,
   png,
   pngObjectUrl,
+  squareSticker,
+  squareStickerObjectUrl,
   txt,
   txtObjectUrl,
   landscape,
@@ -97,6 +119,7 @@ const urlOptions = QueryString.parse(query);
 const theme = urlOptions.theme || 'light-theme';
 const ios = urlOptions.ios || false;
 const locale = urlOptions.locale || 'en';
+const mode = urlOptions.mode || 'mouse-mode';
 
 // @ts-ignore
 import localeMessages from '../../_locales/en/messages.json';
@@ -105,7 +128,10 @@ import localeMessages from '../../_locales/en/messages.json';
 import { setup } from '../../js/modules/i18n';
 const i18n = setup(locale, localeMessages);
 
-export { theme, ios, locale, i18n };
+export { theme, ios, locale, mode, i18n };
+
+// @ts-ignore
+window.getInteractionMode = () => mode;
 
 // Telling Lodash to relinquish _ for use by underscore
 // @ts-ignore
@@ -113,7 +139,10 @@ _.noConflict();
 
 // @ts-ignore
 window.log = {
+  // tslint:disable-next-line no-console
   info: console.log,
-  error: console.log,
-  war: console.log,
+  // tslint:disable-next-line no-console
+  error: console.error,
+  // tslint:disable-next-line no-console
+  warn: console.warn,
 };

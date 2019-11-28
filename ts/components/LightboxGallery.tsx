@@ -6,9 +6,9 @@ import React from 'react';
 import * as MIME from '../types/MIME';
 import { Lightbox } from './Lightbox';
 import { Message } from './conversation/media-gallery/types/Message';
-import { AttachmentType } from './conversation/types';
 
-import { Localizer } from '../types/Util';
+import { AttachmentType } from '../types/Attachment';
+import { LocalizerType } from '../types/Util';
 
 export interface MediaItemType {
   objectURL?: string;
@@ -21,10 +21,10 @@ export interface MediaItemType {
 
 interface Props {
   close: () => void;
-  i18n: Localizer;
+  i18n: LocalizerType;
   media: Array<MediaItemType>;
   onSave?: (
-    { attachment, message }: { attachment: AttachmentType; message: Message }
+    options: { attachment: AttachmentType; message: Message; index: number }
   ) => void;
   selectedIndex: number;
 }
@@ -61,27 +61,31 @@ export class LightboxGallery extends React.Component<Props, State> {
     const objectURL = selectedMedia.objectURL || 'images/alert-outline.svg';
     const { attachment } = selectedMedia;
 
+    const saveCallback = onSave ? this.handleSave : undefined;
+    const captionCallback = attachment ? attachment.caption : undefined;
+
     return (
       <Lightbox
+        caption={captionCallback}
         close={close}
-        onPrevious={onPrevious}
-        onNext={onNext}
-        onSave={onSave ? this.handleSave : undefined}
-        objectURL={objectURL}
-        caption={attachment ? attachment.caption : undefined}
         contentType={selectedMedia.contentType}
         i18n={i18n}
+        isViewOnce={false}
+        objectURL={objectURL}
+        onNext={onNext}
+        onPrevious={onPrevious}
+        onSave={saveCallback}
       />
     );
   }
 
-  private handlePrevious = () => {
+  private readonly handlePrevious = () => {
     this.setState(prevState => ({
       selectedIndex: Math.max(prevState.selectedIndex - 1, 0),
     }));
   };
 
-  private handleNext = () => {
+  private readonly handleNext = () => {
     this.setState((prevState, props) => ({
       selectedIndex: Math.min(
         prevState.selectedIndex + 1,
@@ -90,7 +94,7 @@ export class LightboxGallery extends React.Component<Props, State> {
     }));
   };
 
-  private handleSave = () => {
+  private readonly handleSave = () => {
     const { media, onSave } = this.props;
     if (!onSave) {
       return;
@@ -98,8 +102,8 @@ export class LightboxGallery extends React.Component<Props, State> {
 
     const { selectedIndex } = this.state;
     const mediaItem = media[selectedIndex];
-    const { attachment, message } = mediaItem;
+    const { attachment, message, index } = mediaItem;
 
-    onSave({ attachment, message });
+    onSave({ attachment, message, index });
   };
 }

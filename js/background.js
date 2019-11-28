@@ -3,6 +3,7 @@
   _,
   Backbone,
   ConversationController,
+  MessageController,
   getAccountManager,
   Signal,
   storage,
@@ -14,6 +15,44 @@
 // eslint-disable-next-line func-names
 (async function() {
   'use strict';
+
+  const eventHandlerQueue = new window.PQueue({ concurrency: 1 });
+  const deliveryReceiptQueue = new window.PQueue({
+    concurrency: 1,
+  });
+  deliveryReceiptQueue.pause();
+  const deliveryReceiptBatcher = window.Signal.Util.createBatcher({
+    wait: 500,
+    maxSize: 500,
+    processBatch: async items => {
+      const bySource = _.groupBy(items, item => item.source);
+      const sources = Object.keys(bySource);
+
+      for (let i = 0, max = sources.length; i < max; i += 1) {
+        const source = sources[i];
+        const timestamps = bySource[source].map(item => item.timestamp);
+
+        try {
+          const { wrap, sendOptions } = ConversationController.prepareForSend(
+            source
+          );
+          // eslint-disable-next-line no-await-in-loop
+          await wrap(
+            textsecure.messaging.sendDeliveryReceipt(
+              source,
+              timestamps,
+              sendOptions
+            )
+          );
+        } catch (error) {
+          window.log.error(
+            `Failed to send delivery receipt to ${source} for timestamps ${timestamps}:`,
+            error && error.stack ? error.stack : error
+          );
+        }
+      }
+    },
+  });
 
   // Globally disable drag and drop
   document.body.addEventListener(
@@ -33,92 +72,109 @@
     false
   );
 
+  // Idle timer - you're active for ACTIVE_TIMEOUT after one of these events
+  const ACTIVE_TIMEOUT = 15 * 1000;
+  const ACTIVE_EVENTS = [
+    'click',
+    'keypress',
+    'mousedown',
+    'mousemove',
+    // 'scroll', // this is triggered by Timeline re-renders, can't use
+    'touchstart',
+    'wheel',
+  ];
+
+  const LISTENER_DEBOUNCE = 5 * 1000;
+  let activeHandlers = [];
+  let activeTimestamp = Date.now();
+
+  window.resetActiveTimer = _.throttle(() => {
+    const previouslyActive = window.isActive();
+    activeTimestamp = Date.now();
+    if (!previouslyActive) {
+      activeHandlers.forEach(handler => handler());
+    }
+  }, LISTENER_DEBOUNCE);
+
+  ACTIVE_EVENTS.forEach(name => {
+    document.addEventListener(name, window.resetActiveTimer, true);
+  });
+
+  window.isActive = () => {
+    const now = Date.now();
+    return window.isFocused() && now <= activeTimestamp + ACTIVE_TIMEOUT;
+  };
+  window.registerForActive = handler => activeHandlers.push(handler);
+  window.unregisterForActive = handler => {
+    activeHandlers = activeHandlers.filter(item => item !== handler);
+  };
+
+  // Keyboard/mouse mode
+  let interactionMode = 'mouse';
+  $(document.body).addClass('mouse-mode');
+
+  window.enterKeyboardMode = () => {
+    if (interactionMode === 'keyboard') {
+      return;
+    }
+
+    interactionMode = 'keyboard';
+    $(document.body)
+      .addClass('keyboard-mode')
+      .removeClass('mouse-mode');
+    const { userChanged } = window.reduxActions.user;
+    const { clearSelectedMessage } = window.reduxActions.conversations;
+    if (clearSelectedMessage) {
+      clearSelectedMessage();
+    }
+    if (userChanged) {
+      userChanged({ interactionMode });
+    }
+  };
+  window.enterMouseMode = () => {
+    if (interactionMode === 'mouse') {
+      return;
+    }
+
+    interactionMode = 'mouse';
+    $(document.body)
+      .addClass('mouse-mode')
+      .removeClass('keyboard-mode');
+    const { userChanged } = window.reduxActions.user;
+    const { clearSelectedMessage } = window.reduxActions.conversations;
+    if (clearSelectedMessage) {
+      clearSelectedMessage();
+    }
+    if (userChanged) {
+      userChanged({ interactionMode });
+    }
+  };
+
+  document.addEventListener(
+    'keydown',
+    event => {
+      if (event.key === 'Tab') {
+        window.enterKeyboardMode();
+      }
+    },
+    true
+  );
+  document.addEventListener('wheel', window.enterMouseMode, true);
+  document.addEventListener('mousedown', window.enterMouseMode, true);
+
+  window.getInteractionMode = () => interactionMode;
+
   // Load these images now to ensure that they don't flicker on first use
-  const images = [];
+  window.preloadedImages = [];
   function preload(list) {
     for (let index = 0, max = list.length; index < max; index += 1) {
       const image = new Image();
       image.src = `./images/${list[index]}`;
-      images.push(image);
+      window.preloadedImages.push(image);
     }
   }
-  preload([
-    'alert-outline.svg',
-    'android.svg',
-    'apple.svg',
-    'appstore.svg',
-    'audio.svg',
-    'back.svg',
-    'chat-bubble-outline.svg',
-    'chat-bubble.svg',
-    'check-circle-outline.svg',
-    'check.svg',
-    'clock.svg',
-    'close-circle.svg',
-    'delete.svg',
-    'dots-horizontal.svg',
-    'double-check.svg',
-    'down.svg',
-    'download.svg',
-    'ellipsis.svg',
-    'error.svg',
-    'error_red.svg',
-    'file-gradient.svg',
-    'file.svg',
-    'folder-outline.svg',
-    'forward.svg',
-    'gear.svg',
-    'group_default.png',
-    'hourglass_empty.svg',
-    'hourglass_full.svg',
-    'icon_1024.png',
-    'icon_128.png',
-    'icon_16.png',
-    'icon_250.png',
-    'icon_256.png',
-    'icon_32.png',
-    'icon_48.png',
-    'image.svg',
-    'import.svg',
-    'lead-pencil.svg',
-    'menu.svg',
-    'microphone.svg',
-    'movie.svg',
-    'open_link.svg',
-    'paperclip.svg',
-    'play.svg',
-    'playstore.png',
-    'read.svg',
-    'reply.svg',
-    'save.svg',
-    'search.svg',
-    'sending.svg',
-    'shield.svg',
-    'signal-laptop.png',
-    'signal-phone.png',
-    'smile.svg',
-    'sync.svg',
-    'timer-00.svg',
-    'timer-05.svg',
-    'timer-10.svg',
-    'timer-15.svg',
-    'timer-20.svg',
-    'timer-25.svg',
-    'timer-30.svg',
-    'timer-35.svg',
-    'timer-40.svg',
-    'timer-45.svg',
-    'timer-50.svg',
-    'timer-55.svg',
-    'timer-60.svg',
-    'timer.svg',
-    'verified-check.svg',
-    'video.svg',
-    'voice.svg',
-    'warning.svg',
-    'x.svg',
-    'x_white.svg',
-  ]);
+  const builtInImages = await window.getBuiltInImages();
+  preload(builtInImages);
 
   // We add this to window here because the default Node context is erased at the end
   //   of preload.js processing
@@ -155,8 +211,6 @@
   window.owsDesktopApp = {};
   window.document.title = window.getTitle();
 
-  // start a background worker for ecc
-  textsecure.startWorker('js/libsignal-protocol-worker.js');
   Whisper.KeyChangeListener.init(textsecure.storage.protocol);
   textsecure.storage.protocol.on('removePreKey', () => {
     getAccountManager().refreshPreKeys();
@@ -177,6 +231,12 @@
       const PASSWORD = storage.get('password');
       accountManager = new textsecure.AccountManager(USERNAME, PASSWORD);
       accountManager.addEventListener('registration', () => {
+        const user = {
+          regionCode: window.storage.get('regionCode'),
+          ourNumber: textsecure.storage.user.getNumber(),
+        };
+        Whisper.events.trigger('userChanged', user);
+
         Whisper.Registration.markDone();
         window.log.info('dispatching registration event');
         Whisper.events.trigger('registration_done');
@@ -187,11 +247,15 @@
 
   const cancelInitializationMessage = Views.Initialization.setMessage();
 
-  const isIndexedDBPresent = await doesDatabaseExist();
-  if (isIndexedDBPresent) {
-    window.installStorage(window.legacyStorage);
-    window.log.info('Start IndexedDB migrations');
-    await runMigrations();
+  const version = await window.Signal.Data.getItemById('version');
+  let isIndexedDBPresent = false;
+  if (!version) {
+    isIndexedDBPresent = await doesDatabaseExist();
+    if (isIndexedDBPresent) {
+      window.installStorage(window.legacyStorage);
+      window.log.info('Start IndexedDB migrations');
+      await runMigrations();
+    }
   }
 
   window.log.info('Storage fetch');
@@ -201,6 +265,7 @@
     switch (theme) {
       case 'dark':
       case 'light':
+      case 'system':
         return theme;
       case 'android-dark':
         return 'dark';
@@ -224,7 +289,11 @@
     window.Events = {
       getDeviceName: () => textsecure.storage.user.getDeviceName(),
 
-      getThemeSetting: () => storage.get('theme-setting', 'light'),
+      getThemeSetting: () =>
+        storage.get(
+          'theme-setting',
+          window.platform === 'darwin' ? 'system' : 'light'
+        ),
       setThemeSetting: value => {
         storage.put('theme-setting', value);
         onChangeTheme();
@@ -268,34 +337,68 @@
         $('.dark-overlay').on('click', () => $('.dark-overlay').remove());
       },
       removeDarkOverlay: () => $('.dark-overlay').remove(),
+      showKeyboardShortcuts: () => window.showKeyboardShortcuts(),
+
       deleteAllData: () => {
         const clearDataView = new window.Whisper.ClearDataView().render();
         $('body').append(clearDataView.el);
       },
 
       shutdown: async () => {
+        // Stop background processing
+        window.Signal.AttachmentDownloads.stop();
+        if (idleDetector) {
+          idleDetector.stop();
+        }
+
+        // Stop processing incoming messages
+        if (messageReceiver) {
+          await messageReceiver.stopProcessing();
+          await window.waitForAllBatchers();
+        }
+
+        if (messageReceiver) {
+          messageReceiver.unregisterBatchers();
+          messageReceiver = null;
+        }
+
+        // A number of still-to-queue database queries might be waiting inside batchers.
+        //   We wait for these to empty first, and then shut down the data interface.
+        await Promise.all([
+          window.waitForAllBatchers(),
+          window.waitForAllWaitBatchers(),
+        ]);
+
+        // Shut down the data interface cleanly
         await window.Signal.Data.shutdown();
       },
+
+      showStickerPack: async (packId, key) => {
+        // We can get these events even if the user has never linked this instance.
+        if (Whisper.Import.isIncomplete() || !Whisper.Registration.everDone()) {
+          return;
+        }
+
+        // Kick off the download
+        window.Signal.Stickers.downloadEphemeralPack(packId, key);
+
+        const props = {
+          packId,
+          onClose: async () => {
+            stickerPreviewModalView.remove();
+            await window.Signal.Stickers.removeEphemeralPack(packId);
+          },
+        };
+
+        const stickerPreviewModalView = new Whisper.ReactWrapperView({
+          className: 'sticker-preview-modal-wrapper',
+          JSX: Signal.State.Roots.createStickerPreviewModal(
+            window.reduxStore,
+            props
+          ),
+        });
+      },
     };
-
-    const currentVersion = window.getVersion();
-    const lastVersion = storage.get('version');
-    newVersion = !lastVersion || currentVersion !== lastVersion;
-    await storage.put('version', currentVersion);
-
-    if (newVersion) {
-      if (
-        lastVersion &&
-        window.isBeforeVersion(lastVersion, 'v1.15.0-beta.5')
-      ) {
-        await window.Signal.Logs.deleteAll();
-        window.restart();
-      }
-
-      window.log.info(
-        `New version detected: ${currentVersion}; previous: ${lastVersion}`
-      );
-    }
 
     if (isIndexedDBPresent) {
       await mandatoryMessageUpgrade({ upgradeMessageSchema });
@@ -315,48 +418,69 @@
       await storage.put('indexeddb-delete-needed', true);
     }
 
-    Views.Initialization.setMessage(window.i18n('optimizingApplication'));
+    // How long since we were last running?
+    const now = Date.now();
+    const lastHeartbeat = storage.get('lastHeartbeat');
+    await storage.put('lastStartup', Date.now());
 
-    window.log.info('Cleanup: starting...');
-    const messagesForCleanup = await window.Signal.Data.getOutgoingWithoutExpiresAt(
-      {
-        MessageCollection: Whisper.MessageCollection,
+    const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
+    if (lastHeartbeat > 0 && now - lastHeartbeat > THIRTY_DAYS) {
+      await unlinkAndDisconnect();
+    }
+
+    // Start heartbeat timer
+    storage.put('lastHeartbeat', Date.now());
+    const TWELVE_HOURS = 12 * 60 * 60 * 1000;
+    setInterval(() => storage.put('lastHeartbeat', Date.now()), TWELVE_HOURS);
+
+    const currentVersion = window.getVersion();
+    const lastVersion = storage.get('version');
+    newVersion = !lastVersion || currentVersion !== lastVersion;
+    await storage.put('version', currentVersion);
+
+    if (newVersion && lastVersion) {
+      window.log.info(
+        `New version detected: ${currentVersion}; previous: ${lastVersion}`
+      );
+
+      const themeSetting = window.Events.getThemeSetting();
+      const newThemeSetting = mapOldThemeToNew(themeSetting);
+
+      if (
+        window.isBeforeVersion(lastVersion, 'v1.25.0') &&
+        window.platform === 'darwin' &&
+        newThemeSetting === window.systemTheme
+      ) {
+        window.Events.setThemeSetting('system');
+      } else {
+        window.Events.setThemeSetting(newThemeSetting);
       }
-    );
-    window.log.info(
-      `Cleanup: Found ${messagesForCleanup.length} messages for cleanup`
-    );
-    await Promise.all(
-      messagesForCleanup.map(async message => {
-        const delivered = message.get('delivered');
-        const sentAt = message.get('sent_at');
-        const expirationStartTimestamp = message.get(
-          'expirationStartTimestamp'
+
+      if (window.isBeforeVersion(lastVersion, 'v1.25.0')) {
+        // Stickers flags
+        await Promise.all([
+          storage.put('showStickersIntroduction', true),
+          storage.put('showStickerPickerHint', true),
+        ]);
+      }
+
+      if (window.isBeforeVersion(lastVersion, 'v1.26.0')) {
+        // Ensure that we re-register our support for sealed sender
+        await storage.put(
+          'hasRegisterSupportForUnauthenticatedDelivery',
+          false
         );
+      }
 
-        if (message.hasErrors()) {
-          return;
-        }
+      // This one should always be last - it could restart the app
+      if (window.isBeforeVersion(lastVersion, 'v1.15.0-beta.5')) {
+        await window.Signal.Logs.deleteAll();
+        window.restart();
+        return;
+      }
+    }
 
-        if (delivered) {
-          window.log.info(
-            `Cleanup: Starting timer for delivered message ${sentAt}`
-          );
-          message.set(
-            'expirationStartTimestamp',
-            expirationStartTimestamp || sentAt
-          );
-          await message.setToExpire();
-          return;
-        }
-
-        window.log.info(`Cleanup: Deleting unsent message ${sentAt}`);
-        await window.Signal.Data.removeMessage(message.id, {
-          Message: Whisper.Message,
-        });
-      })
-    );
-    window.log.info('Cleanup: complete');
+    Views.Initialization.setMessage(window.i18n('optimizingApplication'));
 
     if (newVersion) {
       await window.Signal.Data.cleanupOrphanedAttachments();
@@ -409,31 +533,683 @@
     };
     startSpellCheck();
 
-    const themeSetting = window.Events.getThemeSetting();
-    const newThemeSetting = mapOldThemeToNew(themeSetting);
-    window.Events.setThemeSetting(newThemeSetting);
-
     try {
-      await ConversationController.load();
+      await Promise.all([
+        ConversationController.load(),
+        Signal.Stickers.load(),
+        Signal.Emojis.load(),
+        textsecure.storage.protocol.hydrateCaches(),
+      ]);
     } catch (error) {
       window.log.error(
         'background.js: ConversationController failed to load:',
         error && error.stack ? error.stack : error
       );
     } finally {
+      initializeRedux();
       start();
     }
   });
 
-  Whisper.events.on('shutdown', async () => {
-    if (idleDetector) {
-      idleDetector.stop();
+  function initializeRedux() {
+    // Here we set up a full redux store with initial state for our LeftPane Root
+    const convoCollection = window.getConversations();
+    const conversations = convoCollection.map(
+      conversation => conversation.cachedProps
+    );
+    const initialState = {
+      conversations: {
+        conversationLookup: Signal.Util.makeLookup(conversations, 'id'),
+        messagesByConversation: {},
+        messagesLookup: {},
+        selectedConversation: null,
+        selectedMessage: null,
+        selectedMessageCounter: 0,
+        showArchived: false,
+      },
+      emojis: Signal.Emojis.getInitialState(),
+      items: storage.getItemsState(),
+      stickers: Signal.Stickers.getInitialState(),
+      user: {
+        attachmentsPath: window.baseAttachmentsPath,
+        stickersPath: window.baseStickersPath,
+        tempPath: window.baseTempPath,
+        regionCode: window.storage.get('regionCode'),
+        ourNumber: textsecure.storage.user.getNumber(),
+        platform: window.platform,
+        i18n: window.i18n,
+        interactionMode: window.getInteractionMode(),
+      },
+    };
+
+    const store = Signal.State.createStore(initialState);
+    window.reduxStore = store;
+
+    const actions = {};
+    window.reduxActions = actions;
+
+    // Binding these actions to our redux store and exposing them allows us to update
+    //   redux when things change in the backbone world.
+    actions.conversations = Signal.State.bindActionCreators(
+      Signal.State.Ducks.conversations.actions,
+      store.dispatch
+    );
+    actions.emojis = Signal.State.bindActionCreators(
+      Signal.State.Ducks.emojis.actions,
+      store.dispatch
+    );
+    actions.items = Signal.State.bindActionCreators(
+      Signal.State.Ducks.items.actions,
+      store.dispatch
+    );
+    actions.user = Signal.State.bindActionCreators(
+      Signal.State.Ducks.user.actions,
+      store.dispatch
+    );
+    actions.search = Signal.State.bindActionCreators(
+      Signal.State.Ducks.search.actions,
+      store.dispatch
+    );
+    actions.stickers = Signal.State.bindActionCreators(
+      Signal.State.Ducks.stickers.actions,
+      store.dispatch
+    );
+
+    const {
+      conversationAdded,
+      conversationChanged,
+      conversationRemoved,
+      removeAllConversations,
+      messageExpired,
+    } = actions.conversations;
+    const { userChanged } = actions.user;
+
+    convoCollection.on('remove', conversation => {
+      const { id } = conversation || {};
+      conversationRemoved(id);
+    });
+    convoCollection.on('add', conversation => {
+      const { id, cachedProps } = conversation || {};
+      conversationAdded(id, cachedProps);
+    });
+    convoCollection.on('change', conversation => {
+      const { id, cachedProps } = conversation || {};
+      conversationChanged(id, cachedProps);
+    });
+    convoCollection.on('reset', removeAllConversations);
+
+    Whisper.events.on('messageExpired', messageExpired);
+    Whisper.events.on('userChanged', userChanged);
+
+    let shortcutGuideView = null;
+
+    window.showKeyboardShortcuts = () => {
+      if (!shortcutGuideView) {
+        shortcutGuideView = new Whisper.ReactWrapperView({
+          className: 'shortcut-guide-wrapper',
+          JSX: Signal.State.Roots.createShortcutGuideModal(window.reduxStore, {
+            close: () => {
+              if (shortcutGuideView) {
+                shortcutGuideView.remove();
+                shortcutGuideView = null;
+              }
+            },
+          }),
+          onClose: () => {
+            shortcutGuideView = null;
+          },
+        });
+      }
+    };
+
+    function findConversation(conversationId, direction, unreadOnly) {
+      const state = store.getState();
+      const lists = Signal.State.Selectors.conversations.getLeftPaneLists(
+        state
+      );
+      const toSearch = state.conversations.showArchived
+        ? lists.archivedConversations
+        : lists.conversations;
+
+      const increment = direction === 'up' ? -1 : 1;
+      let startIndex;
+
+      if (conversationId) {
+        const index = toSearch.findIndex(item => item.id === conversationId);
+        if (index >= 0) {
+          startIndex = index + increment;
+        }
+      } else {
+        startIndex = direction === 'up' ? toSearch.length - 1 : 0;
+      }
+
+      for (
+        let i = startIndex, max = toSearch.length;
+        i >= 0 && i < max;
+        i += increment
+      ) {
+        const target = toSearch[i];
+        if (!unreadOnly) {
+          return target.id;
+        } else if (target.unreadCount > 0) {
+          return target.id;
+        }
+      }
+
+      return null;
     }
-    if (messageReceiver) {
-      await messageReceiver.close();
-    }
-    Whisper.events.trigger('shutdown-complete');
-  });
+
+    document.addEventListener('keydown', event => {
+      const { altKey, ctrlKey, key, metaKey, shiftKey } = event;
+
+      const optionOrAlt = altKey;
+      const ctrlOrCommand = metaKey || ctrlKey;
+
+      const state = store.getState();
+      const selectedId = state.conversations.selectedConversation;
+      const conversation = ConversationController.get(selectedId);
+      const isSearching = Signal.State.Selectors.search.isSearching(state);
+
+      // NAVIGATION
+
+      // Show keyboard shortcuts - handled by Electron-managed keyboard shortcuts
+      // However, on linux Ctrl+/ selects all text, so we prevent that
+      if (ctrlOrCommand && key === '/') {
+        window.showKeyboardShortcuts();
+
+        event.stopPropagation();
+        event.preventDefault();
+
+        return;
+      }
+
+      // Navigate by section
+      if (ctrlOrCommand && !shiftKey && (key === 't' || key === 'T')) {
+        window.enterKeyboardMode();
+        const focusedElement = document.activeElement;
+
+        const targets = [
+          document.querySelector('.module-main-header .module-avatar-button'),
+          document.querySelector('.module-left-pane__to-inbox-button'),
+          document.querySelector('.module-main-header__search__input'),
+          document.querySelector('.module-left-pane__list'),
+          document.querySelector('.module-search-results'),
+          document.querySelector(
+            '.module-composition-area .public-DraftEditor-content'
+          ),
+        ];
+        const focusedIndex = targets.findIndex(target => {
+          if (!target || !focusedElement) {
+            return false;
+          }
+
+          if (target === focusedElement) {
+            return true;
+          }
+
+          if (target.contains(focusedElement)) {
+            return true;
+          }
+
+          return false;
+        });
+        const lastIndex = targets.length - 1;
+
+        let index;
+        if (focusedIndex < 0 || focusedIndex >= lastIndex) {
+          index = 0;
+        } else {
+          index = focusedIndex + 1;
+        }
+
+        while (!targets[index]) {
+          index += 1;
+          if (index > lastIndex) {
+            index = 0;
+          }
+        }
+
+        targets[index].focus();
+      }
+
+      // Cancel out of keyboard shortcut screen - has first precedence
+      if (shortcutGuideView && key === 'Escape') {
+        shortcutGuideView.remove();
+        shortcutGuideView = null;
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+
+      // Escape is heavily overloaded - here we avoid clashes with other Escape handlers
+      if (key === 'Escape') {
+        // Check origin - if within a react component which handles escape, don't handle.
+        //   Why? Because React's synthetic events can cause events to be handled twice.
+        const target = document.activeElement;
+
+        if (
+          target &&
+          target.attributes &&
+          target.attributes.class &&
+          target.attributes.class.value
+        ) {
+          const className = target.attributes.class.value;
+
+          // These want to handle events internally
+
+          // CaptionEditor text box
+          if (className.includes('module-caption-editor__caption-input')) {
+            return;
+          }
+
+          // MainHeader search box
+          if (className.includes('module-main-header__search__input')) {
+            return;
+          }
+        }
+
+        // These add listeners to document, but we'll run first
+        const confirmationModal = document.querySelector(
+          '.module-confirmation-dialog__overlay'
+        );
+        if (confirmationModal) {
+          return;
+        }
+
+        const emojiPicker = document.querySelector('.module-emoji-picker');
+        if (emojiPicker) {
+          return;
+        }
+
+        const lightBox = document.querySelector('.module-lightbox');
+        if (lightBox) {
+          return;
+        }
+
+        const stickerPicker = document.querySelector('.module-sticker-picker');
+        if (stickerPicker) {
+          return;
+        }
+
+        const stickerPreview = document.querySelector(
+          '.module-sticker-manager__preview-modal__overlay'
+        );
+        if (stickerPreview) {
+          return;
+        }
+      }
+
+      // Close Backbone-based confirmation dialog
+      if (Whisper.activeConfirmationView && key === 'Escape') {
+        Whisper.activeConfirmationView.remove();
+        Whisper.activeConfirmationView = null;
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+
+      // Send Escape to active conversation so it can close panels
+      if (conversation && key === 'Escape') {
+        conversation.trigger('escape-pressed');
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+
+      // Change currently selected conversation - up/down, to next/previous unread
+      if (!isSearching && optionOrAlt && !shiftKey && key === 'ArrowUp') {
+        const unreadOnly = false;
+        const targetId = findConversation(
+          conversation ? conversation.id : null,
+          'up',
+          unreadOnly
+        );
+
+        if (targetId) {
+          window.Whisper.events.trigger('showConversation', targetId);
+          event.preventDefault();
+          event.stopPropagation();
+          return;
+        }
+      }
+      if (!isSearching && optionOrAlt && !shiftKey && key === 'ArrowDown') {
+        const unreadOnly = false;
+        const targetId = findConversation(
+          conversation ? conversation.id : null,
+          'down',
+          unreadOnly
+        );
+
+        if (targetId) {
+          window.Whisper.events.trigger('showConversation', targetId);
+          event.preventDefault();
+          event.stopPropagation();
+          return;
+        }
+      }
+      if (!isSearching && optionOrAlt && shiftKey && key === 'ArrowUp') {
+        const unreadOnly = true;
+        const targetId = findConversation(
+          conversation ? conversation.id : null,
+          'up',
+          unreadOnly
+        );
+
+        if (targetId) {
+          window.Whisper.events.trigger('showConversation', targetId);
+          event.preventDefault();
+          event.stopPropagation();
+          return;
+        }
+      }
+      if (!isSearching && optionOrAlt && shiftKey && key === 'ArrowDown') {
+        const unreadOnly = true;
+        const targetId = findConversation(
+          conversation ? conversation.id : null,
+          'down',
+          unreadOnly
+        );
+
+        if (targetId) {
+          window.Whisper.events.trigger('showConversation', targetId);
+          event.preventDefault();
+          event.stopPropagation();
+          return;
+        }
+      }
+
+      // Preferences - handled by Electron-managed keyboard shortcuts
+
+      // Open the top-right menu for current conversation
+      if (
+        conversation &&
+        ctrlOrCommand &&
+        shiftKey &&
+        (key === 'l' || key === 'L')
+      ) {
+        const button = document.querySelector(
+          '.module-conversation-header__more-button'
+        );
+        if (!button) {
+          return;
+        }
+
+        // Because the menu is shown at a location based on the initiating click, we need
+        //   to fake up a mouse event to get the menu to show somewhere other than (0,0).
+        const { x, y, width, height } = button.getBoundingClientRect();
+        const mouseEvent = document.createEvent('MouseEvents');
+        mouseEvent.initMouseEvent(
+          'click',
+          true, // bubbles
+          false, // cancelable
+          null, // view
+          null, // detail
+          0, // screenX,
+          0, // screenY,
+          x + width / 2,
+          y + height / 2,
+          false, // ctrlKey,
+          false, // altKey,
+          false, // shiftKey,
+          false, // metaKey,
+          false, // button,
+          document.body
+        );
+
+        button.dispatchEvent(mouseEvent);
+
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+
+      // Search
+      if (ctrlOrCommand && !shiftKey && (key === 'f' || key === 'F')) {
+        const { startSearch } = actions.search;
+        startSearch();
+
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+
+      // Search in conversation
+      if (
+        conversation &&
+        ctrlOrCommand &&
+        shiftKey &&
+        (key === 'f' || key === 'F')
+      ) {
+        const { searchInConversation } = actions.search;
+        const name = conversation.isMe()
+          ? window.i18n('noteToSelf')
+          : conversation.getTitle();
+        searchInConversation(conversation.id, name);
+
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+
+      // Focus composer field
+      if (
+        conversation &&
+        ctrlOrCommand &&
+        shiftKey &&
+        (key === 't' || key === 'T')
+      ) {
+        conversation.trigger('focus-composer');
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+
+      // Open all media
+      if (
+        conversation &&
+        ctrlOrCommand &&
+        shiftKey &&
+        (key === 'm' || key === 'M')
+      ) {
+        conversation.trigger('open-all-media');
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+
+      // Open emoji picker - handled by component
+
+      // Open sticker picker - handled by component
+
+      // Begin recording voice note
+      if (
+        conversation &&
+        ctrlOrCommand &&
+        shiftKey &&
+        (key === 'v' || key === 'V')
+      ) {
+        conversation.trigger('begin-recording');
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+
+      // Archive or unarchive conversation
+      if (
+        conversation &&
+        !conversation.get('isArchived') &&
+        ctrlOrCommand &&
+        shiftKey &&
+        (key === 'a' || key === 'A')
+      ) {
+        conversation.setArchived(true);
+        conversation.trigger('unload', 'keyboard shortcut archive');
+        Whisper.ToastView.show(
+          Whisper.ConversationArchivedToast,
+          document.body
+        );
+
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+      if (
+        conversation &&
+        conversation.get('isArchived') &&
+        ctrlOrCommand &&
+        shiftKey &&
+        (key === 'u' || key === 'U')
+      ) {
+        conversation.setArchived(false);
+        Whisper.ToastView.show(
+          Whisper.ConversationUnarchivedToast,
+          document.body
+        );
+
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+
+      // Scroll to bottom of list - handled by component
+
+      // Scroll to top of list - handled by component
+
+      // Close conversation
+      if (
+        conversation &&
+        ctrlOrCommand &&
+        shiftKey &&
+        (key === 'c' || key === 'C')
+      ) {
+        conversation.trigger('unload', 'keyboard shortcut close');
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+
+      // MESSAGES
+
+      // Show message details
+      if (
+        conversation &&
+        ctrlOrCommand &&
+        !shiftKey &&
+        (key === 'd' || key === 'D')
+      ) {
+        const { selectedMessage } = state.conversations;
+        if (!selectedMessage) {
+          return;
+        }
+
+        conversation.trigger('show-message-details', selectedMessage);
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+
+      // Toggle reply to message
+      if (
+        conversation &&
+        ctrlOrCommand &&
+        shiftKey &&
+        (key === 'r' || key === 'R')
+      ) {
+        const { selectedMessage } = state.conversations;
+
+        conversation.trigger('toggle-reply', selectedMessage);
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+
+      // Save attachment
+      if (
+        conversation &&
+        ctrlOrCommand &&
+        !shiftKey &&
+        (key === 's' || key === 'S')
+      ) {
+        const { selectedMessage } = state.conversations;
+
+        if (selectedMessage) {
+          conversation.trigger('save-attachment', selectedMessage);
+
+          event.preventDefault();
+          event.stopPropagation();
+          return;
+        }
+      }
+
+      if (
+        conversation &&
+        ctrlOrCommand &&
+        shiftKey &&
+        (key === 'd' || key === 'D')
+      ) {
+        const { selectedMessage } = state.conversations;
+
+        if (selectedMessage) {
+          conversation.trigger('delete-message', selectedMessage);
+
+          event.preventDefault();
+          event.stopPropagation();
+          return;
+        }
+      }
+
+      // COMPOSER
+
+      // Create a newline in your message - handled by component
+
+      // Expand composer - handled by component
+
+      // Send in expanded composer - handled by component
+
+      // Attach file
+      if (
+        conversation &&
+        ctrlOrCommand &&
+        !shiftKey &&
+        (key === 'u' || key === 'U')
+      ) {
+        conversation.trigger('attach-file');
+
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+
+      // Remove draft link preview
+      if (
+        conversation &&
+        ctrlOrCommand &&
+        !shiftKey &&
+        (key === 'p' || key === 'P')
+      ) {
+        conversation.trigger('remove-link-review');
+
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+
+      // Attach file
+      if (
+        conversation &&
+        ctrlOrCommand &&
+        shiftKey &&
+        (key === 'p' || key === 'P')
+      ) {
+        conversation.trigger('remove-all-draft-attachments');
+
+        event.preventDefault();
+        event.stopPropagation();
+        // Commented out because this is the last item
+        // return;
+      }
+    });
+  }
 
   Whisper.events.on('setupWithImport', () => {
     const { appView } = window.owsDesktopApp;
@@ -459,6 +1235,51 @@
   async function start() {
     window.dispatchEvent(new Event('storage_ready'));
 
+    window.log.info('Cleanup: starting...');
+    const messagesForCleanup = await window.Signal.Data.getOutgoingWithoutExpiresAt(
+      {
+        MessageCollection: Whisper.MessageCollection,
+      }
+    );
+    window.log.info(
+      `Cleanup: Found ${messagesForCleanup.length} messages for cleanup`
+    );
+    await Promise.all(
+      messagesForCleanup.map(async message => {
+        const delivered = message.get('delivered');
+        const sentAt = message.get('sent_at');
+        const expirationStartTimestamp = message.get(
+          'expirationStartTimestamp'
+        );
+
+        if (message.hasErrors()) {
+          return;
+        }
+
+        if (delivered) {
+          window.log.info(
+            `Cleanup: Starting timer for delivered message ${sentAt}`
+          );
+          message.set(
+            'expirationStartTimestamp',
+            expirationStartTimestamp || sentAt
+          );
+          await message.setToExpire();
+          return;
+        }
+
+        window.log.info(`Cleanup: Deleting unsent message ${sentAt}`);
+        await window.Signal.Data.removeMessage(message.id, {
+          Message: Whisper.Message,
+        });
+        const conversation = message.getConversation();
+        if (conversation) {
+          await conversation.updateLastMessage();
+        }
+      })
+    );
+    window.log.info('Cleanup: complete');
+
     window.log.info('listening for registration events');
     Whisper.events.on('registration_done', () => {
       window.log.info('handling registration event');
@@ -483,6 +1304,7 @@
 
     Whisper.WallClockListener.init(Whisper.events);
     Whisper.ExpiringMessagesListener.init(Whisper.events);
+    Whisper.TapToViewMessagesListener.init(Whisper.events);
 
     if (Whisper.Import.isIncomplete()) {
       window.log.info('Import was interrupted, showing import error screen');
@@ -522,19 +1344,19 @@
       }
     });
 
-    window.addEventListener('focus', () => Whisper.Notifications.clear());
+    window.registerForActive(() => Whisper.Notifications.clear());
     window.addEventListener('unload', () => Whisper.Notifications.fastClear());
 
-    Whisper.events.on('showConversation', conversation => {
+    Whisper.events.on('showConversation', (id, messageId) => {
       if (appView) {
-        appView.openConversation(conversation);
+        appView.openConversation(id, messageId);
       }
     });
 
-    Whisper.Notifications.on('click', conversation => {
+    Whisper.Notifications.on('click', (id, messageId) => {
       window.showWindow();
-      if (conversation) {
-        appView.openConversation(conversation);
+      if (id) {
+        appView.openConversation(id, messageId);
       } else {
         appView.openInbox({
           initialLoadComplete,
@@ -545,13 +1367,6 @@
 
   window.getSyncRequest = () =>
     new textsecure.SyncRequest(textsecure.messaging, messageReceiver);
-
-  Whisper.events.on('start-shutdown', async () => {
-    if (messageReceiver) {
-      await messageReceiver.close();
-    }
-    Whisper.events.trigger('shutdown-complete');
-  });
 
   let disconnectTimer = null;
   function onOffline() {
@@ -602,6 +1417,7 @@
     if (messageReceiver) {
       messageReceiver.close();
     }
+    window.Signal.AttachmentDownloads.stop();
   }
 
   let connectCount = 0;
@@ -629,7 +1445,12 @@
     }
 
     if (messageReceiver) {
-      messageReceiver.close();
+      await messageReceiver.stopProcessing();
+
+      await window.waitForAllBatchers();
+      messageReceiver.unregisterBatchers();
+
+      messageReceiver = null;
     }
 
     const USERNAME = storage.get('number_id');
@@ -642,6 +1463,7 @@
       serverTrustRoot: window.getServerTrustRoot(),
     };
 
+    deliveryReceiptQueue.pause(); // avoid flood of delivery receipts until we catch up
     Whisper.Notifications.disable(); // avoid notification flood until empty
 
     // initialize the socket and start listening for messages
@@ -651,25 +1473,53 @@
       mySignalingKey,
       options
     );
-    messageReceiver.addEventListener('message', onMessageReceived);
-    messageReceiver.addEventListener('delivery', onDeliveryReceipt);
-    messageReceiver.addEventListener('contact', onContactReceived);
-    messageReceiver.addEventListener('group', onGroupReceived);
-    messageReceiver.addEventListener('sent', onSentMessage);
-    messageReceiver.addEventListener('readSync', onReadSync);
-    messageReceiver.addEventListener('read', onReadReceipt);
-    messageReceiver.addEventListener('verified', onVerified);
-    messageReceiver.addEventListener('error', onError);
-    messageReceiver.addEventListener('empty', onEmpty);
-    messageReceiver.addEventListener('reconnect', onReconnect);
-    messageReceiver.addEventListener('progress', onProgress);
-    messageReceiver.addEventListener('configuration', onConfiguration);
-    messageReceiver.addEventListener('typing', onTyping);
+
+    function addQueuedEventListener(name, handler) {
+      messageReceiver.addEventListener(name, (...args) =>
+        eventHandlerQueue.add(async () => {
+          try {
+            await handler(...args);
+          } finally {
+            // message/sent: Message.handleDataMessage has its own queue and will trigger
+            //   this event itself when complete.
+            // error: Error processing (below) also has its own queue and self-trigger.
+            if (name !== 'message' && name !== 'sent' && name !== 'error') {
+              Whisper.events.trigger('incrementProgress');
+            }
+          }
+        })
+      );
+    }
+
+    addQueuedEventListener('message', onMessageReceived);
+    addQueuedEventListener('delivery', onDeliveryReceipt);
+    addQueuedEventListener('contact', onContactReceived);
+    addQueuedEventListener('group', onGroupReceived);
+    addQueuedEventListener('sent', onSentMessage);
+    addQueuedEventListener('readSync', onReadSync);
+    addQueuedEventListener('read', onReadReceipt);
+    addQueuedEventListener('verified', onVerified);
+    addQueuedEventListener('error', onError);
+    addQueuedEventListener('empty', onEmpty);
+    addQueuedEventListener('reconnect', onReconnect);
+    addQueuedEventListener('configuration', onConfiguration);
+    addQueuedEventListener('typing', onTyping);
+    addQueuedEventListener('sticker-pack', onStickerPack);
+    addQueuedEventListener('viewSync', onViewSync);
+
+    window.Signal.AttachmentDownloads.start({
+      getMessageReceiver: () => messageReceiver,
+      logger: window.log,
+    });
 
     window.textsecure.messaging = new textsecure.MessageSender(
       USERNAME,
       PASSWORD
     );
+
+    if (connectCount === 1) {
+      window.Signal.Stickers.downloadQueuedPacks();
+    }
 
     // On startup after upgrading to a new version, request a contact sync
     //   (but only if we're not the primary device)
@@ -732,11 +1582,34 @@
         Whisper.events.trigger('contactsync');
       });
 
+      const ourNumber = textsecure.storage.user.getNumber();
+      const { wrap, sendOptions } = ConversationController.prepareForSend(
+        ourNumber,
+        { syncMessage: true }
+      );
+
+      const installedStickerPacks = window.Signal.Stickers.getInstalledStickerPacks();
+      if (installedStickerPacks.length) {
+        const operations = installedStickerPacks.map(pack => ({
+          packId: pack.id,
+          packKey: pack.key,
+          installed: true,
+        }));
+
+        wrap(
+          window.textsecure.messaging.sendStickerPackSync(
+            operations,
+            sendOptions
+          )
+        ).catch(error => {
+          window.log.error(
+            'Failed to send installed sticker packs via sync message',
+            error && error.stack ? error.stack : error
+          );
+        });
+      }
+
       if (Whisper.Import.isComplete()) {
-        const { wrap, sendOptions } = ConversationController.prepareForSend(
-          textsecure.storage.user.getNumber(),
-          { syncMessage: true }
-        );
         wrap(
           textsecure.messaging.sendRequestConfigurationSyncMessage(sendOptions)
         ).catch(error => {
@@ -759,8 +1632,15 @@
       view.applyTheme();
     }
   }
-  function onEmpty() {
+  async function onEmpty() {
+    await Promise.all([
+      window.waitForAllBatchers(),
+      window.waitForAllWaitBatchers(),
+    ]);
+    window.log.info('onEmpty: All outstanding database requests complete');
     initialLoadComplete = true;
+
+    window.readyForUpdates();
 
     let interval = setInterval(() => {
       const view = window.owsDesktopApp.appView;
@@ -771,6 +1651,7 @@
       }
     }, 500);
 
+    deliveryReceiptQueue.start();
     Whisper.Notifications.enable();
   }
   function onReconnect() {
@@ -778,23 +1659,39 @@
     //   scenarios where we're coming back from sleep, we can get offline/online events
     //   very fast, and it looks like a network blip. But we need to suppress
     //   notifications in these scenarios too. So we listen for 'reconnect' events.
+    deliveryReceiptQueue.pause();
     Whisper.Notifications.disable();
   }
-  function onProgress(ev) {
-    const { count } = ev;
-    window.log.info(`onProgress: Message count is ${count}`);
+
+  let initialStartupCount = 0;
+  Whisper.events.on('incrementProgress', incrementProgress);
+  function incrementProgress() {
+    initialStartupCount += 1;
+
+    // Only update progress every 10 items
+    if (initialStartupCount % 10 !== 0) {
+      return;
+    }
+
+    window.log.info(
+      `incrementProgress: Message count is ${initialStartupCount}`
+    );
 
     const view = window.owsDesktopApp.appView;
     if (view) {
-      view.onProgress(count);
+      view.onProgress(initialStartupCount);
     }
   }
+
   function onConfiguration(ev) {
+    ev.confirm();
+
     const { configuration } = ev;
     const {
       readReceipts,
       typingIndicators,
       unidentifiedDeliveryIndicators,
+      linkPreviews,
     } = configuration;
 
     storage.put('read-receipt-setting', readReceipts);
@@ -813,10 +1710,14 @@
       storage.put('typingIndicators', typingIndicators);
     }
 
-    ev.confirm();
+    if (linkPreviews === true || linkPreviews === false) {
+      storage.put('linkPreviews', linkPreviews);
+    }
   }
 
   function onTyping(ev) {
+    // Note: this type of message is automatically removed from cache in MessageReceiver
+
     const { typing, sender, senderDevice } = ev;
     const { groupId, started } = typing || {};
 
@@ -826,14 +1727,59 @@
     }
 
     const conversation = ConversationController.get(groupId || sender);
+    const ourNumber = textsecure.storage.user.getNumber();
 
     if (conversation) {
+      // We drop typing notifications in groups we're not a part of
+      if (!conversation.isPrivate() && !conversation.hasMember(ourNumber)) {
+        window.log.warn(
+          `Received typing indicator for group ${conversation.idForLogging()}, which we're not a part of. Dropping.`
+        );
+        return;
+      }
+
       conversation.notifyTyping({
         isTyping: started,
         sender,
         senderDevice,
       });
     }
+  }
+
+  async function onStickerPack(ev) {
+    ev.confirm();
+
+    const packs = ev.stickerPacks || [];
+
+    packs.forEach(pack => {
+      const { id, key, isInstall, isRemove } = pack || {};
+
+      if (!id || !key || (!isInstall && !isRemove)) {
+        window.log.warn(
+          'Received malformed sticker pack operation sync message'
+        );
+        return;
+      }
+
+      const status = window.Signal.Stickers.getStickerPackStatus(id);
+
+      if (status === 'installed' && isRemove) {
+        window.reduxActions.stickers.uninstallStickerPack(id, key, {
+          fromSync: true,
+        });
+      } else if (isInstall) {
+        if (status === 'downloaded') {
+          window.reduxActions.stickers.installStickerPack(id, key, {
+            fromSync: true,
+          });
+        } else {
+          window.Signal.Stickers.downloadStickerPack(id, key, {
+            finalStatus: 'installed',
+            fromSync: true,
+          });
+        }
+      }
+    });
   }
 
   async function onContactReceived(ev) {
@@ -879,6 +1825,8 @@
           details.profileKey
         );
         conversation.setProfileKey(profileKey);
+      } else {
+        conversation.dropProfileKey();
       }
 
       if (typeof details.blocked !== 'undefined') {
@@ -909,9 +1857,7 @@
         conversation.set(newAttributes);
       }
 
-      await window.Signal.Data.updateConversation(id, conversation.attributes, {
-        Conversation: Whisper.Conversation,
-      });
+      window.Signal.Data.updateConversation(id, conversation.attributes);
       const { expireTimer } = details;
       const isValidExpireTimer = typeof expireTimer === 'number';
       if (isValidExpireTimer) {
@@ -993,9 +1939,8 @@
       conversation.set(newAttributes);
     }
 
-    await window.Signal.Data.updateConversation(id, conversation.attributes, {
-      Conversation: Whisper.Conversation,
-    });
+    window.Signal.Data.updateConversation(id, conversation.attributes);
+
     const { expireTimer } = details;
     const isValidExpireTimer = typeof expireTimer === 'number';
     if (!isValidExpireTimer) {
@@ -1007,8 +1952,6 @@
     await conversation.updateExpirationTimer(expireTimer, source, receivedAt, {
       fromSync: true,
     });
-
-    ev.confirm();
   }
 
   // Descriptors
@@ -1029,117 +1972,6 @@
       ? getGroupDescriptor(message.group)
       : { type: Message.PRIVATE, id: source };
 
-  function createMessageHandler({
-    createMessage,
-    getMessageDescriptor,
-    handleProfileUpdate,
-  }) {
-    return async event => {
-      const { data, confirm } = event;
-
-      const messageDescriptor = getMessageDescriptor(data);
-
-      const { PROFILE_KEY_UPDATE } = textsecure.protobuf.DataMessage.Flags;
-      // eslint-disable-next-line no-bitwise
-      const isProfileUpdate = Boolean(data.message.flags & PROFILE_KEY_UPDATE);
-      if (isProfileUpdate) {
-        return handleProfileUpdate({ data, confirm, messageDescriptor });
-      }
-
-      const message = await createMessage(data);
-      const isDuplicate = await isMessageDuplicate(message);
-      if (isDuplicate) {
-        window.log.warn('Received duplicate message', message.idForLogging());
-        return event.confirm();
-      }
-
-      const withQuoteReference = await copyFromQuotedMessage(data.message);
-      const upgradedMessage = await upgradeMessageSchema(withQuoteReference);
-
-      await ConversationController.getOrCreateAndWait(
-        messageDescriptor.id,
-        messageDescriptor.type
-      );
-      return message.handleDataMessage(upgradedMessage, event.confirm, {
-        initialLoadComplete,
-      });
-    };
-  }
-
-  async function copyFromQuotedMessage(message) {
-    const { quote } = message;
-    if (!quote) {
-      return message;
-    }
-
-    const { attachments, id, author } = quote;
-    const firstAttachment = attachments[0];
-
-    const collection = await window.Signal.Data.getMessagesBySentAt(id, {
-      MessageCollection: Whisper.MessageCollection,
-    });
-    const queryMessage = collection.find(item => {
-      const messageAuthor = item.getContact();
-
-      return messageAuthor && author === messageAuthor.id;
-    });
-
-    if (!queryMessage) {
-      quote.referencedMessageNotFound = true;
-      return message;
-    }
-
-    quote.text = queryMessage.get('body');
-    if (firstAttachment) {
-      firstAttachment.thumbnail = null;
-    }
-
-    if (
-      !firstAttachment ||
-      (!window.Signal.Util.GoogleChrome.isImageTypeSupported(
-        firstAttachment.contentType
-      ) &&
-        !window.Signal.Util.GoogleChrome.isVideoTypeSupported(
-          firstAttachment.contentType
-        ))
-    ) {
-      return message;
-    }
-
-    try {
-      if (queryMessage.get('schemaVersion') < Message.CURRENT_SCHEMA_VERSION) {
-        const upgradedMessage = await upgradeMessageSchema(
-          queryMessage.attributes
-        );
-        queryMessage.set(upgradedMessage);
-        await window.Signal.Data.saveMessage(upgradedMessage, {
-          Message: Whisper.Message,
-        });
-      }
-    } catch (error) {
-      window.log.error(
-        'Problem upgrading message quoted message from database',
-        Errors.toLogFormat(error)
-      );
-      return message;
-    }
-
-    const queryAttachments = queryMessage.get('attachments') || [];
-
-    if (queryAttachments.length === 0) {
-      return message;
-    }
-
-    const queryFirst = queryAttachments[0];
-    const { thumbnail } = queryFirst;
-
-    if (thumbnail && thumbnail.path) {
-      firstAttachment.thumbnail = thumbnail;
-    }
-
-    return message;
-  }
-
   // Received:
   async function handleMessageReceivedProfileUpdate({
     data,
@@ -1158,11 +1990,71 @@
     return confirm();
   }
 
-  const onMessageReceived = createMessageHandler({
-    handleProfileUpdate: handleMessageReceivedProfileUpdate,
-    getMessageDescriptor: getDescriptorForReceived,
-    createMessage: initIncomingMessage,
-  });
+  async function onMessageReceived(event) {
+    const { data, confirm } = event;
+
+    const messageDescriptor = getDescriptorForReceived(data);
+
+    const { PROFILE_KEY_UPDATE } = textsecure.protobuf.DataMessage.Flags;
+    // eslint-disable-next-line no-bitwise
+    const isProfileUpdate = Boolean(data.message.flags & PROFILE_KEY_UPDATE);
+    if (isProfileUpdate) {
+      await handleMessageReceivedProfileUpdate({
+        data,
+        confirm,
+        messageDescriptor,
+      });
+      return;
+    }
+
+    const isDuplicate = await isMessageDuplicate({
+      source: data.source,
+      sourceDevice: data.sourceDevice,
+      sent_at: data.timestamp,
+    });
+    if (isDuplicate) {
+      window.log.warn(
+        'Received duplicate message',
+        `${data.source}.${data.sourceDevice} ${data.timestamp}`
+      );
+      confirm();
+      return;
+    }
+
+    // We do this after the duplicate check because it might send a delivery receipt
+    const message = await initIncomingMessage(data);
+
+    const ourNumber = textsecure.storage.user.getNumber();
+    const isGroupUpdate =
+      data.message.group &&
+      data.message.group.type !== textsecure.protobuf.GroupContext.Type.DELIVER;
+    const conversation = ConversationController.get(messageDescriptor.id);
+
+    // We drop messages for groups we already know about, which we're not a part of,
+    //   except for group updates
+    if (
+      conversation &&
+      !conversation.isPrivate() &&
+      !conversation.hasMember(ourNumber) &&
+      !isGroupUpdate
+    ) {
+      window.log.warn(
+        `Received message destined for group ${conversation.idForLogging()}, which we're not a part of. Dropping.`
+      );
+      confirm();
+      return;
+    }
+
+    await ConversationController.getOrCreateAndWait(
+      messageDescriptor.id,
+      messageDescriptor.type
+    );
+
+    // Don't wait for handleDataMessage, as it has its own per-conversation queueing
+    message.handleDataMessage(data.message, event.confirm, {
+      initialLoadComplete,
+    });
+  }
 
   // Sent:
   async function handleMessageSentProfileUpdate({
@@ -1178,9 +2070,7 @@
     );
 
     conversation.set({ profileSharing: true });
-    await window.Signal.Data.updateConversation(id, conversation.attributes, {
-      Conversation: Whisper.Conversation,
-    });
+    window.Signal.Data.updateConversation(id, conversation.attributes);
 
     // Then we update our own profileKey if it's different from what we have
     const ourNumber = textsecure.storage.user.getNumber();
@@ -1223,24 +2113,94 @@
     });
   }
 
-  const onSentMessage = createMessageHandler({
-    handleProfileUpdate: handleMessageSentProfileUpdate,
-    getMessageDescriptor: getDescriptorForSent,
-    createMessage: createSentMessage,
-  });
+  async function onSentMessage(event) {
+    const { data, confirm } = event;
 
-  async function isMessageDuplicate(message) {
+    const messageDescriptor = getDescriptorForSent(data);
+
+    const { PROFILE_KEY_UPDATE } = textsecure.protobuf.DataMessage.Flags;
+    // eslint-disable-next-line no-bitwise
+    const isProfileUpdate = Boolean(data.message.flags & PROFILE_KEY_UPDATE);
+    if (isProfileUpdate) {
+      await handleMessageSentProfileUpdate({
+        data,
+        confirm,
+        messageDescriptor,
+      });
+      return;
+    }
+
+    const message = await createSentMessage(data);
+    const existing = await getExistingMessage(message.attributes);
+    const isUpdate = Boolean(data.isRecipientUpdate);
+
+    if (isUpdate && existing) {
+      event.confirm();
+
+      let sentTo = [];
+      let unidentifiedDeliveries = [];
+      if (Array.isArray(data.unidentifiedStatus)) {
+        sentTo = data.unidentifiedStatus.map(item => item.destination);
+
+        const unidentified = _.filter(data.unidentifiedStatus, item =>
+          Boolean(item.unidentified)
+        );
+        unidentifiedDeliveries = unidentified.map(item => item.destination);
+      }
+
+      existing.set({
+        sent_to: _.union(existing.get('sent_to'), sentTo),
+        unidentifiedDeliveries: _.union(
+          existing.get('unidentifiedDeliveries'),
+          unidentifiedDeliveries
+        ),
+      });
+      await window.Signal.Data.saveMessage(existing.attributes, {
+        Message: Whisper.Message,
+      });
+    } else if (isUpdate) {
+      window.log.warn(
+        `onSentMessage: Received update transcript, but no existing entry for message ${message.idForLogging()}. Dropping.`
+      );
+      event.confirm();
+    } else if (existing) {
+      window.log.warn(
+        `onSentMessage: Received duplicate transcript for message ${message.idForLogging()}, but it was not an update transcript. Dropping.`
+      );
+      event.confirm();
+    } else {
+      await ConversationController.getOrCreateAndWait(
+        messageDescriptor.id,
+        messageDescriptor.type
+      );
+
+      // Don't wait for handleDataMessage, as it has its own per-conversation queueing
+      message.handleDataMessage(data.message, event.confirm, {
+        initialLoadComplete,
+      });
+    }
+  }
+
+  async function getExistingMessage(data) {
     try {
-      const { attributes } = message;
-      const result = await window.Signal.Data.getMessageBySender(attributes, {
+      const result = await window.Signal.Data.getMessageBySender(data, {
         Message: Whisper.Message,
       });
 
-      return Boolean(result);
+      if (result) {
+        return MessageController.register(result.id, result);
+      }
+
+      return null;
     } catch (error) {
-      window.log.error('isMessageDuplicate error:', Errors.toLogFormat(error));
+      window.log.error('getExistingMessage error:', Errors.toLogFormat(error));
       return false;
     }
+  }
+
+  async function isMessageDuplicate(data) {
+    const result = await getExistingMessage(data);
+    return Boolean(result);
   }
 
   async function initIncomingMessage(data, options = {}) {
@@ -1263,27 +2223,76 @@
       return message;
     }
 
-    try {
-      const { wrap, sendOptions } = ConversationController.prepareForSend(
-        data.source
-      );
-      await wrap(
-        textsecure.messaging.sendDeliveryReceipt(
-          data.source,
-          data.timestamp,
-          sendOptions
-        )
-      );
-    } catch (error) {
-      window.log.error(
-        `Failed to send delivery receipt to ${data.source} for message ${
-          data.timestamp
-        }:`,
-        error && error.stack ? error.stack : error
-      );
-    }
+    // Note: We both queue and batch because we want to wait until we are done processing
+    //   incoming messages to start sending outgoing delivery receipts. The queue can be
+    //   paused easily.
+    deliveryReceiptQueue.add(() => {
+      deliveryReceiptBatcher.add({
+        source: data.source,
+        timestamp: data.timestamp,
+      });
+    });
 
     return message;
+  }
+
+  async function unlinkAndDisconnect() {
+    Whisper.events.trigger('unauthorized');
+
+    if (messageReceiver) {
+      await messageReceiver.stopProcessing();
+
+      await window.waitForAllBatchers();
+      messageReceiver.unregisterBatchers();
+
+      messageReceiver = null;
+    }
+
+    onEmpty();
+
+    window.log.warn(
+      'Client is no longer authorized; deleting local configuration'
+    );
+    Whisper.Registration.remove();
+
+    const NUMBER_ID_KEY = 'number_id';
+    const VERSION_KEY = 'version';
+    const LAST_PROCESSED_INDEX_KEY = 'attachmentMigration_lastProcessedIndex';
+    const IS_MIGRATION_COMPLETE_KEY = 'attachmentMigration_isComplete';
+
+    const previousNumberId = textsecure.storage.get(NUMBER_ID_KEY);
+    const lastProcessedIndex = textsecure.storage.get(LAST_PROCESSED_INDEX_KEY);
+    const isMigrationComplete = textsecure.storage.get(
+      IS_MIGRATION_COMPLETE_KEY
+    );
+
+    try {
+      await textsecure.storage.protocol.removeAllConfiguration();
+
+      // These two bits of data are important to ensure that the app loads up
+      //   the conversation list, instead of showing just the QR code screen.
+      Whisper.Registration.markEverDone();
+      textsecure.storage.put(NUMBER_ID_KEY, previousNumberId);
+
+      // These two are important to ensure we don't rip through every message
+      //   in the database attempting to upgrade it after starting up again.
+      textsecure.storage.put(
+        IS_MIGRATION_COMPLETE_KEY,
+        isMigrationComplete || false
+      );
+      textsecure.storage.put(
+        LAST_PROCESSED_INDEX_KEY,
+        lastProcessedIndex || null
+      );
+      textsecure.storage.put(VERSION_KEY, window.getVersion());
+
+      window.log.info('Successfully cleared local configuration');
+    } catch (eraseError) {
+      window.log.error(
+        'Something went wrong clearing local configuration',
+        eraseError && eraseError.stack ? eraseError.stack : eraseError
+      );
+    }
   }
 
   async function onError(ev) {
@@ -1295,54 +2304,7 @@
       error.name === 'HTTPError' &&
       (error.code === 401 || error.code === 403)
     ) {
-      Whisper.events.trigger('unauthorized');
-
-      window.log.warn(
-        'Client is no longer authorized; deleting local configuration'
-      );
-      Whisper.Registration.remove();
-
-      const NUMBER_ID_KEY = 'number_id';
-      const VERSION_KEY = 'version';
-      const LAST_PROCESSED_INDEX_KEY = 'attachmentMigration_lastProcessedIndex';
-      const IS_MIGRATION_COMPLETE_KEY = 'attachmentMigration_isComplete';
-
-      const previousNumberId = textsecure.storage.get(NUMBER_ID_KEY);
-      const lastProcessedIndex = textsecure.storage.get(
-        LAST_PROCESSED_INDEX_KEY
-      );
-      const isMigrationComplete = textsecure.storage.get(
-        IS_MIGRATION_COMPLETE_KEY
-      );
-
-      try {
-        await textsecure.storage.protocol.removeAllConfiguration();
-
-        // These two bits of data are important to ensure that the app loads up
-        //   the conversation list, instead of showing just the QR code screen.
-        Whisper.Registration.markEverDone();
-        textsecure.storage.put(NUMBER_ID_KEY, previousNumberId);
-
-        // These two are important to ensure we don't rip through every message
-        //   in the database attempting to upgrade it after starting up again.
-        textsecure.storage.put(
-          IS_MIGRATION_COMPLETE_KEY,
-          isMigrationComplete || false
-        );
-        textsecure.storage.put(
-          LAST_PROCESSED_INDEX_KEY,
-          lastProcessedIndex || null
-        );
-        textsecure.storage.put(VERSION_KEY, window.getVersion());
-
-        window.log.info('Successfully cleared local configuration');
-      } catch (eraseError) {
-        window.log.error(
-          'Something went wrong clearing local configuration',
-          eraseError && eraseError.stack ? eraseError.stack : eraseError
-        );
-      }
-
+      await unlinkAndDisconnect();
       return;
     }
 
@@ -1368,37 +2330,82 @@
       }
       const envelope = ev.proto;
       const message = await initIncomingMessage(envelope, { isError: true });
+      const isDuplicate = await isMessageDuplicate(message.attributes);
+      if (isDuplicate) {
+        ev.confirm();
+        window.log.warn(
+          `Got duplicate error for message ${message.idForLogging()}`
+        );
+        return;
+      }
 
-      await message.saveErrors(error || new Error('Error was null'));
-      const id = message.get('conversationId');
+      const conversationId = message.get('conversationId');
       const conversation = await ConversationController.getOrCreateAndWait(
-        id,
+        conversationId,
         'private'
       );
-      conversation.set({
-        active_at: Date.now(),
-        unreadCount: conversation.get('unreadCount') + 1,
-      });
 
-      const conversationTimestamp = conversation.get('timestamp');
-      const messageTimestamp = message.get('timestamp');
-      if (!conversationTimestamp || messageTimestamp > conversationTimestamp) {
-        conversation.set({ timestamp: message.get('sent_at') });
-      }
+      // This matches the queueing behavior used in Message.handleDataMessage
+      conversation.queueJob(async () => {
+        const model = new Whisper.Message({
+          ...message.attributes,
+          id: window.getGuid(),
+        });
+        await model.saveErrors(error || new Error('Error was null'), {
+          skipSave: true,
+        });
 
-      conversation.trigger('newmessage', message);
-      conversation.notify(message);
+        MessageController.register(model.id, model);
+        await window.Signal.Data.saveMessage(model.attributes, {
+          Message: Whisper.Message,
+          forceSave: true,
+        });
 
-      if (ev.confirm) {
-        ev.confirm();
-      }
+        conversation.set({
+          active_at: Date.now(),
+          unreadCount: conversation.get('unreadCount') + 1,
+        });
 
-      await window.Signal.Data.updateConversation(id, conversation.attributes, {
-        Conversation: Whisper.Conversation,
+        const conversationTimestamp = conversation.get('timestamp');
+        const messageTimestamp = model.get('timestamp');
+        if (
+          !conversationTimestamp ||
+          messageTimestamp > conversationTimestamp
+        ) {
+          conversation.set({ timestamp: model.get('sent_at') });
+        }
+
+        conversation.trigger('newmessage', model);
+        conversation.notify(model);
+
+        Whisper.events.trigger('incrementProgress');
+
+        if (ev.confirm) {
+          ev.confirm();
+        }
+
+        window.Signal.Data.updateConversation(
+          conversationId,
+          conversation.attributes
+        );
       });
     }
 
     throw error;
+  }
+
+  async function onViewSync(ev) {
+    ev.confirm();
+
+    const { source, timestamp } = ev;
+    window.log.info(`view sync ${source} ${timestamp}`);
+
+    const sync = Whisper.ViewSyncs.add({
+      source,
+      timestamp,
+    });
+
+    Whisper.ViewSyncs.onSync(sync);
   }
 
   function onReadReceipt(ev) {
@@ -1407,8 +2414,10 @@
     const { reader } = ev.read;
     window.log.info('read receipt', reader, timestamp);
 
+    ev.confirm();
+
     if (!storage.get('read-receipt-setting')) {
-      return ev.confirm();
+      return;
     }
 
     const receipt = Whisper.ReadReceipts.add({
@@ -1417,10 +2426,8 @@
       read_at: readAt,
     });
 
-    receipt.on('remove', ev.confirm);
-
-    // Calling this directly so we can wait for completion
-    return Whisper.ReadReceipts.onReceipt(receipt);
+    // Note: We do not wait for completion here
+    Whisper.ReadReceipts.onReceipt(receipt);
   }
 
   function onReadSync(ev) {
@@ -1437,7 +2444,8 @@
 
     receipt.on('remove', ev.confirm);
 
-    // Calling this directly so we can wait for completion
+    // Note: Here we wait, because we want read states to be in the database
+    //   before we move on.
     return Whisper.ReadSyncs.onReceipt(receipt);
   }
 
@@ -1445,6 +2453,10 @@
     const number = ev.verified.destination;
     const key = ev.verified.identityKey;
     let state;
+
+    if (ev.confirm) {
+      ev.confirm();
+    }
 
     const c = new Whisper.Conversation({
       id: number,
@@ -1496,10 +2508,6 @@
     } else {
       await contact.setUnverified(options);
     }
-
-    if (ev.confirm) {
-      ev.confirm();
-    }
   }
 
   function onDeliveryReceipt(ev) {
@@ -1510,14 +2518,14 @@
       deliveryReceipt.timestamp
     );
 
+    ev.confirm();
+
     const receipt = Whisper.DeliveryReceipts.add({
       timestamp: deliveryReceipt.timestamp,
       source: deliveryReceipt.source,
     });
 
-    ev.confirm();
-
-    // Calling this directly so we can wait for completion
-    return Whisper.DeliveryReceipts.onReceipt(receipt);
+    // Note: We don't wait for completion here
+    Whisper.DeliveryReceipts.onReceipt(receipt);
   }
 })();

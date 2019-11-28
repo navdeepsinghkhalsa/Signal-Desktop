@@ -5,7 +5,7 @@ import moment from 'moment';
 import { Avatar } from '../Avatar';
 import { ContactName } from './ContactName';
 import { Message, Props as MessageProps } from './Message';
-import { Localizer } from '../../types/Util';
+import { LocalizerType } from '../../types/Util';
 
 interface Contact {
   status: string;
@@ -31,10 +31,22 @@ interface Props {
   errors: Array<Error>;
   contacts: Array<Contact>;
 
-  i18n: Localizer;
+  i18n: LocalizerType;
 }
 
 export class MessageDetail extends React.Component<Props> {
+  private readonly focusRef = React.createRef<HTMLDivElement>();
+
+  public componentDidMount() {
+    // When this component is created, it's initially not part of the DOM, and then it's
+    //   added off-screen and animated in. This ensures that the focus takes.
+    setTimeout(() => {
+      if (this.focusRef.current) {
+        this.focusRef.current.focus();
+      }
+    });
+  }
+
   public renderAvatar(contact: Contact) {
     const { i18n } = this.props;
     const { avatarPath, color, phoneNumber, name, profileName } = contact;
@@ -48,7 +60,7 @@ export class MessageDetail extends React.Component<Props> {
         name={name}
         phoneNumber={phoneNumber}
         profileName={profileName}
-        size={48}
+        size={52}
       />
     );
   }
@@ -59,7 +71,9 @@ export class MessageDetail extends React.Component<Props> {
     return (
       <div className="module-message-detail__delete-button-container">
         <button
-          onClick={message.onDelete}
+          onClick={() => {
+            message.deleteMessage(message.id);
+          }}
           className="module-message-detail__delete-button"
         >
           {i18n('deleteThisMessage')}
@@ -109,7 +123,6 @@ export class MessageDetail extends React.Component<Props> {
               phoneNumber={contact.phoneNumber}
               name={contact.name}
               profileName={contact.profileName}
-              i18n={i18n}
             />
           </div>
           {errors.map((error, index) => (
@@ -143,7 +156,7 @@ export class MessageDetail extends React.Component<Props> {
     const { errors, message, receivedAt, sentAt, i18n } = this.props;
 
     return (
-      <div className="module-message-detail">
+      <div className="module-message-detail" tabIndex={0} ref={this.focusRef}>
         <div className="module-message-detail__message-container">
           <Message i18n={i18n} {...message} />
         </div>

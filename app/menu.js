@@ -17,6 +17,7 @@ exports.createTemplate = (options, messages) => {
     setupWithImport,
     showAbout,
     showDebugLog,
+    showKeyboardShortcuts,
     showSettings,
   } = options;
 
@@ -26,6 +27,7 @@ exports.createTemplate = (options, messages) => {
       submenu: [
         {
           label: messages.mainMenuSettings.message,
+          accelerator: 'CommandOrControl+,',
           click: showSettings,
         },
         {
@@ -85,6 +87,7 @@ exports.createTemplate = (options, messages) => {
           label: messages.viewMenuResetZoom.message,
         },
         {
+          accelerator: platform === 'darwin' ? 'Command+=' : 'Control+=',
           role: 'zoomin',
           label: messages.viewMenuZoomIn.message,
         },
@@ -130,11 +133,16 @@ exports.createTemplate = (options, messages) => {
       role: 'help',
       submenu: [
         {
-          label: messages.goToReleaseNotes.message,
-          click: openReleaseNotes,
+          label: messages.helpMenuShowKeyboardShortcuts.message,
+          accelerator: 'CmdOrCtrl+/',
+          click: showKeyboardShortcuts,
         },
         {
           type: 'separator',
+        },
+        {
+          label: messages.goToReleaseNotes.message,
+          click: openReleaseNotes,
         },
         {
           label: messages.goToForums.message,
@@ -237,6 +245,7 @@ function updateForMac(template, messages, options) {
 
   // Add the OSX-specific Signal Desktop menu at the far left
   template.unshift({
+    label: messages.signalDesktop.message,
     submenu: [
       {
         label: messages.aboutSignalDesktop.message,

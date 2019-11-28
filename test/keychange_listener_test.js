@@ -10,8 +10,9 @@ describe('KeyChangeListener', () => {
   const newKey = libsignal.crypto.getRandomBytes(33);
   let store;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     store = new SignalProtocolStore();
+    await store.hydrateCaches();
     Whisper.KeyChangeListener.init(store);
     return store.saveIdentity(address.toString(), oldKey);
   });
@@ -33,17 +34,19 @@ describe('KeyChangeListener', () => {
     });
 
     after(async () => {
-      await convo.destroyMessages();
+      await window.Signal.Data.removeAllMessagesInConversation(convo.id, {
+        MessageCollection: Whisper.MessageCollection,
+      });
       await window.Signal.Data.saveConversation(convo.id);
     });
 
     it('generates a key change notice in the private conversation with this contact', done => {
-      convo.once('newmessage', async () => {
-        await convo.fetchMessages();
-        const message = convo.messageCollection.at(0);
-        assert.strictEqual(message.get('type'), 'keychange');
+      const original = convo.addKeyChange;
+      convo.addKeyChange = keyChangedId => {
+        assert.equal(address.getName(), keyChangedId);
+        convo.addKeyChange = original;
         done();
-      });
+      };
       store.saveIdentity(address.toString(), newKey);
     });
   });
@@ -61,17 +64,20 @@ describe('KeyChangeListener', () => {
       });
     });
     after(async () => {
-      await convo.destroyMessages();
+      await window.Signal.Data.removeAllMessagesInConversation(convo.id, {
+        MessageCollection: Whisper.MessageCollection,
+      });
       await window.Signal.Data.saveConversation(convo.id);
     });
 
     it('generates a key change notice in the group conversation with this contact', done => {
-      convo.once('newmessage', async () => {
-        await convo.fetchMessages();
-        const message = convo.messageCollection.at(0);
-        assert.strictEqual(message.get('type'), 'keychange');
+      const original = convo.addKeyChange;
+      convo.addKeyChange = keyChangedId => {
+        assert.equal(address.getName(), keyChangedId);
+        convo.addKeyChange = original;
         done();
-      });
+      };
+
       store.saveIdentity(address.toString(), newKey);
     });
   });

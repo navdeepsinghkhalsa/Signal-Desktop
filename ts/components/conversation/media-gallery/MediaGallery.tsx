@@ -8,14 +8,15 @@ import { EmptyState } from './EmptyState';
 import { groupMediaItemsByDate } from './groupMediaItemsByDate';
 import { ItemClickEvent } from './types/ItemClickEvent';
 import { missingCaseError } from '../../../util/missingCaseError';
-import { Localizer } from '../../../types/Util';
+import { LocalizerType } from '../../../types/Util';
 
 import { MediaItemType } from '../../LightboxGallery';
 
 interface Props {
   documents: Array<MediaItemType>;
-  i18n: Localizer;
+  i18n: LocalizerType;
   media: Array<MediaItemType>;
+
   onItemClick?: (event: ItemClickEvent) => void;
 }
 
@@ -54,6 +55,7 @@ const Tab = ({
       )}
       onClick={handleClick}
       role="tab"
+      tabIndex={0}
     >
       {label}
     </div>
@@ -61,15 +63,26 @@ const Tab = ({
 };
 
 export class MediaGallery extends React.Component<Props, State> {
+  public readonly focusRef: React.RefObject<HTMLDivElement> = React.createRef();
   public state: State = {
     selectedTab: 'media',
   };
+
+  public componentDidMount() {
+    // When this component is created, it's initially not part of the DOM, and then it's
+    //   added off-screen and animated in. This ensures that the focus takes.
+    setTimeout(() => {
+      if (this.focusRef.current) {
+        this.focusRef.current.focus();
+      }
+    });
+  }
 
   public render() {
     const { selectedTab } = this.state;
 
     return (
-      <div className="module-media-gallery">
+      <div className="module-media-gallery" tabIndex={-1} ref={this.focusRef}>
         <div className="module-media-gallery__tab-container">
           <Tab
             label="Media"
@@ -91,7 +104,7 @@ export class MediaGallery extends React.Component<Props, State> {
     );
   }
 
-  private handleTabSelect = (event: TabSelectEvent): void => {
+  private readonly handleTabSelect = (event: TabSelectEvent): void => {
     this.setState({ selectedTab: event.type });
   };
 

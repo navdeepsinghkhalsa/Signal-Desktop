@@ -72,22 +72,6 @@ describe('Conversation', () => {
     assert.strictEqual(convo.contactCollection.at('2').get('name'), 'C');
   });
 
-  it('contains its own messages', async () => {
-    const convo = new Whisper.ConversationCollection().add({
-      id: '+18085555555',
-    });
-    await convo.fetchMessages();
-    assert.notEqual(convo.messageCollection.length, 0);
-  });
-
-  it('contains only its own messages', async () => {
-    const convo = new Whisper.ConversationCollection().add({
-      id: '+18085556666',
-    });
-    await convo.fetchMessages();
-    assert.strictEqual(convo.messageCollection.length, 0);
-  });
-
   it('adds conversation to message collection upon leaving group', async () => {
     const convo = new Whisper.ConversationCollection().add({
       type: 'group',
@@ -161,53 +145,5 @@ describe('Conversation', () => {
         '+1 (415) 555-5555',
       ].forEach(checkAttributes);
     });
-  });
-});
-
-describe('Conversation search', () => {
-  let convo;
-
-  beforeEach(async () => {
-    convo = new Whisper.ConversationCollection().add({
-      id: '+14155555555',
-      type: 'private',
-      name: 'John Doe',
-    });
-    await window.Signal.Data.saveConversation(convo.attributes, {
-      Conversation: Whisper.Conversation,
-    });
-  });
-
-  afterEach(clearDatabase);
-
-  async function testSearch(queries) {
-    await Promise.all(
-      queries.map(async query => {
-        const collection = new Whisper.ConversationCollection();
-        await collection.search(query);
-
-        assert.isDefined(collection.get(convo.id), `no result for "${query}"`);
-      })
-    );
-  }
-  it('matches by partial phone number', () => {
-    return testSearch([
-      '1',
-      '4',
-      '+1',
-      '415',
-      '4155',
-      '4155555555',
-      '14155555555',
-      '+14155555555',
-    ]);
-  });
-  it('matches by name', () => {
-    return testSearch(['John', 'Doe', 'john', 'doe', 'John Doe', 'john doe']);
-  });
-  it('does not match +', async () => {
-    const collection = new Whisper.ConversationCollection();
-    await collection.search('+');
-    assert.isUndefined(collection.get(convo.id), 'got result for "+"');
   });
 });

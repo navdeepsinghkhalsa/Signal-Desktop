@@ -156,15 +156,42 @@ message DataMessage {
     optional string            organization    = 7;
   }
 
-  optional string             body        = 1;
-  repeated AttachmentPointer  attachments = 2;
-  optional GroupContext       group       = 3;
-  optional uint32             flags       = 4;
-  optional uint32             expireTimer = 5;
-  optional bytes              profileKey  = 6;
-  optional uint64             timestamp   = 7;
-  optional Quote              quote       = 8;
-  repeated Contact            contact     = 9;
+  message Preview {
+    optional string            url   = 1;
+    optional string            title = 2;
+    optional AttachmentPointer image = 3;
+  }
+
+  message Sticker {
+    optional bytes packId           = 1;
+    optional bytes packKey          = 2;
+    optional uint32 stickerId       = 3;
+    optional AttachmentPointer data = 4;
+  }
+
+  enum ProtocolVersion {
+    option allow_alias = true;
+
+    INITIAL         = 0;
+    MESSAGE_TIMERS  = 1;
+    VIEW_ONCE       = 2;
+    VIEW_ONCE_VIDEO = 3;
+    CURRENT         = 3;
+  }
+
+  optional string             body                    = 1;
+  repeated AttachmentPointer  attachments             = 2;
+  optional GroupContext       group                   = 3;
+  optional uint32             flags                   = 4;
+  optional uint32             expireTimer             = 5;
+  optional bytes              profileKey              = 6;
+  optional uint64             timestamp               = 7;
+  optional Quote              quote                   = 8;
+  repeated Contact            contact                 = 9;
+  repeated Preview            preview                 = 10;
+  optional Sticker            sticker                 = 11;
+  optional uint32             requiredProtocolVersion = 12;
+  optional bool               isViewOnce              = 14;
 }
 
 message NullMessage {
@@ -217,6 +244,7 @@ message SyncMessage {
     optional DataMessage                message                  = 3;
     optional uint64                     expirationStartTimestamp = 4;
     repeated UnidentifiedDeliveryStatus unidentifiedStatus       = 5;
+    optional bool                       isRecipientUpdate        = 6 [default = false];
   }
 
   message Contacts {
@@ -254,17 +282,35 @@ message SyncMessage {
     optional bool readReceipts                   = 1;
     optional bool unidentifiedDeliveryIndicators = 2;
     optional bool typingIndicators               = 3;
+    optional bool linkPreviews                   = 4;
   }
 
-  optional Sent          sent          = 1;
-  optional Contacts      contacts      = 2;
-  optional Groups        groups        = 3;
-  optional Request       request       = 4;
-  repeated Read          read          = 5;
-  optional Blocked       blocked       = 6;
-  optional Verified      verified      = 7;
-  optional Configuration configuration = 9;
-  optional bytes         padding       = 8;
+  message StickerPackOperation {
+    enum Type {
+      INSTALL = 0;
+      REMOVE  = 1;
+    }
+    optional bytes packId  = 1;
+    optional bytes packKey = 2;
+    optional Type  type    = 3;
+  }
+
+  message ViewOnceOpen {
+    optional string sender    = 1;
+    optional uint64 timestamp = 2;
+  }
+
+  optional Sent                 sent                 = 1;
+  optional Contacts             contacts             = 2;
+  optional Groups               groups               = 3;
+  optional Request              request              = 4;
+  repeated Read                 read                 = 5;
+  optional Blocked              blocked              = 6;
+  optional Verified             verified             = 7;
+  optional Configuration        configuration        = 9;
+  optional bytes                padding              = 8;
+  repeated StickerPackOperation stickerPackOperation = 10;
+  optional ViewOnceOpen         viewOnceOpen         = 11;
 }
 
 message AttachmentPointer {

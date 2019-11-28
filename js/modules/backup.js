@@ -109,9 +109,9 @@ function createOutputStream(writer) {
   };
 }
 
-async function exportContactAndGroupsToFile(parent) {
+async function exportConversationListToFile(parent) {
   const writer = await createFileAndWriter(parent, 'db.json');
-  return exportContactsAndGroups(writer);
+  return exportConversationList(writer);
 }
 
 function writeArray(stream, array) {
@@ -137,7 +137,7 @@ function getPlainJS(collection) {
   return collection.map(model => model.attributes);
 }
 
-async function exportContactsAndGroups(fileWriter) {
+async function exportConversationList(fileWriter) {
   const stream = createOutputStream(fileWriter);
 
   stream.write('{');
@@ -148,13 +148,6 @@ async function exportContactsAndGroups(fileWriter) {
   });
   window.log.info(`Exporting ${conversations.length} conversations`);
   writeArray(stream, getPlainJS(conversations));
-
-  stream.write(',');
-
-  stream.write('"groups": ');
-  const groups = await window.Signal.Data.getAllGroups();
-  window.log.info(`Exporting ${groups.length} groups`);
-  writeArray(stream, groups);
 
   stream.write('}');
   await stream.close();
@@ -167,7 +160,7 @@ async function importNonMessages(parent, options) {
 }
 
 function eliminateClientConfigInBackup(data, targetPath) {
-  const cleaned = _.pick(data, 'conversations', 'groups');
+  const cleaned = _.pick(data, 'conversations');
   window.log.info('Writing configuration-free backup file back to disk');
   try {
     fs.writeFileSync(targetPath, JSON.stringify(cleaned));
@@ -223,10 +216,8 @@ async function importFromJsonString(jsonString, targetPath, options) {
   _.defaults(options, {
     forceLightImport: false,
     conversationLookup: {},
-    groupLookup: {},
   });
 
-  const { groupLookup } = options;
   const result = {
     fullImport: true,
   };
@@ -251,7 +242,7 @@ async function importFromJsonString(jsonString, targetPath, options) {
 
   // We mutate the on-disk backup to prevent the user from importing client
   //   configuration more than once - that causes lots of encryption errors.
-  //   This of course preserves the true data: conversations and groups.
+  //   This of course preserves the true data: conversations.
   eliminateClientConfigInBackup(importObject, targetPath);
 
   const storeNames = _.keys(importObject);
@@ -262,12 +253,12 @@ async function importFromJsonString(jsonString, targetPath, options) {
   const remainingStoreNames = _.without(
     storeNames,
     'conversations',
-    'unprocessed'
+    'unprocessed',
+    'groups' // in old data sets, but no longer included in database schema
   );
   await importConversationsFromJSON(conversations, options);
 
   const SAVE_FUNCTIONS = {
-    groups: window.Signal.Data.createOrUpdateGroup,
     identityKeys: window.Signal.Data.createOrUpdateIdentityKey,
     items: window.Signal.Data.createOrUpdateItem,
     preKeys: window.Signal.Data.createOrUpdatePreKey,
@@ -292,29 +283,17 @@ async function importFromJsonString(jsonString, targetPath, options) {
         return;
       }
 
-      let skipCount = 0;
-
       for (let i = 0, max = toImport.length; i < max; i += 1) {
         const toAdd = unstringify(toImport[i]);
-
-        const haveGroupAlready =
-          storeName === 'groups' && groupLookup[getGroupKey(toAdd)];
-
-        if (haveGroupAlready) {
-          skipCount += 1;
-        } else {
-          // eslint-disable-next-line no-await-in-loop
-          await save(toAdd);
-        }
+        // eslint-disable-next-line no-await-in-loop
+        await save(toAdd);
       }
 
       window.log.info(
         'Done importing to store',
         storeName,
         'Total count:',
-        toImport.length,
-        'Skipped:',
-        skipCount
+        toImport.length
       );
     })
   );
@@ -616,6 +595,50 @@ async function writeContactAvatars(contact, options) {
   }
 }
 
+async function writePreviewImage(preview, options) {
+  const { image } = preview || {};
+  if (!image || !image.path) {
+    return;
+  }
+
+  const { dir, message, index, key, newKey } = options;
+  const name = _getAnonymousAttachmentFileName(message, index);
+  const filename = `${name}-preview`;
+  const target = path.join(dir, filename);
+
+  await writeEncryptedAttachment(target, image.path, {
+    key,
+    newKey,
+    filename,
+    dir,
+  });
+}
+
+async function writePreviews(preview, options) {
+  const { name } = options;
+
+  try {
+    await Promise.all(
+      _.map(preview, (item, index) =>
+        writePreviewImage(
+          item,
+          Object.assign({}, options, {
+            index,
+          })
+        )
+      )
+    );
+  } catch (error) {
+    window.log.error(
+      'writePreviews: error exporting conversation',
+      name,
+      ':',
+      error && error.stack ? error.stack : error
+    );
+    throw error;
+  }
+}
+
 async function writeEncryptedAttachment(target, source, options = {}) {
   const { key, newKey, filename, dir } = options;
 
@@ -673,7 +696,7 @@ async function exportConversation(conversation, options = {}) {
 
   while (!complete) {
     // eslint-disable-next-line no-await-in-loop
-    const collection = await window.Signal.Data.getMessagesByConversation(
+    const collection = await window.Signal.Data.getOlderMessagesByConversation(
       conversation.id,
       {
         limit: CHUNK_SIZE,
@@ -692,7 +715,7 @@ async function exportConversation(conversation, options = {}) {
       count += 1;
 
       // skip message if it is disappearing, no matter the amount of time left
-      if (message.expireTimer) {
+      if (message.expireTimer || message.messageTimer || message.isViewOnce) {
         // eslint-disable-next-line no-continue
         continue;
       }
@@ -745,6 +768,18 @@ async function exportConversation(conversation, options = {}) {
       if (contact && contact.length > 0) {
         // eslint-disable-next-line no-await-in-loop
         await writeContactAvatars(contact, {
+          dir: attachmentsDir,
+          name,
+          message,
+          key,
+          newKey,
+        });
+      }
+
+      const { preview } = message;
+      if (preview && preview.length > 0) {
+        // eslint-disable-next-line no-await-in-loop
+        await writePreviews(preview, {
           dir: attachmentsDir,
           name,
           message,
@@ -925,7 +960,18 @@ async function loadAttachments(dir, getName, options) {
     })
   );
 
-  // TODO: Handle video screenshots, and image/video thumbnails
+  const { preview } = message;
+  await Promise.all(
+    _.map(preview, (item, index) => {
+      const image = item && item.image;
+      if (!image) {
+        return null;
+      }
+
+      const name = `${getName(message, index)}-preview`;
+      return readEncryptedAttachment(dir, image, name, options);
+    })
+  );
 }
 
 function saveMessage(message) {
@@ -1013,8 +1059,9 @@ async function importConversation(dir, options) {
       message.quote.attachments &&
       message.quote.attachments.length > 0;
     const hasContacts = message.contact && message.contact.length;
+    const hasPreviews = message.preview && message.preview.length;
 
-    if (hasAttachments || hasQuotedAttachments || hasContacts) {
+    if (hasAttachments || hasQuotedAttachments || hasContacts || hasPreviews) {
       const importMessage = async () => {
         const getName = attachmentsDir
           ? _getAnonymousAttachmentFileName
@@ -1092,14 +1139,6 @@ async function loadConversationLookup() {
   return fromPairs(map(array, item => [getConversationKey(item), true]));
 }
 
-function getGroupKey(group) {
-  return group.id;
-}
-async function loadGroupsLookup() {
-  const array = await window.Signal.Data.getAllGroupIds();
-  return fromPairs(map(array, item => [getGroupKey(item), true]));
-}
-
 function getDirectoryForExport() {
   return getDirectory();
 }
@@ -1165,13 +1204,17 @@ function createTempDir() {
 }
 
 function deleteAll(pattern) {
-  window.log.info(`Deleting ${pattern}`);
   return pify(rimraf)(pattern);
 }
 
 const ARCHIVE_NAME = 'messages.tar.gz';
 
 async function exportToDirectory(directory, options) {
+  const env = window.getEnvironment();
+  if (env !== 'test') {
+    throw new Error('export is only supported in test mode');
+  }
+
   options = options || {};
 
   if (!options.key) {
@@ -1186,7 +1229,7 @@ async function exportToDirectory(directory, options) {
 
     const attachmentsDir = await createDirectory(directory, 'attachments');
 
-    await exportContactAndGroupsToFile(stagingDir);
+    await exportConversationListToFile(stagingDir);
     await exportConversations(
       Object.assign({}, options, {
         messagesDir: stagingDir,
@@ -1230,17 +1273,20 @@ async function importFromDirectory(directory, options) {
     const lookups = await Promise.all([
       loadMessagesLookup(),
       loadConversationLookup(),
-      loadGroupsLookup(),
     ]);
-    const [messageLookup, conversationLookup, groupLookup] = lookups;
+    const [messageLookup, conversationLookup] = lookups;
     options = Object.assign({}, options, {
       messageLookup,
       conversationLookup,
-      groupLookup,
     });
 
     const archivePath = path.join(directory, ARCHIVE_NAME);
     if (fs.existsSync(archivePath)) {
+      const env = window.getEnvironment();
+      if (env !== 'test') {
+        throw new Error('import is only supported in test mode');
+      }
+
       // we're in the world of an encrypted, zipped backup
       if (!options.key) {
         throw new Error(

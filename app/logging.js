@@ -12,9 +12,13 @@ const readFirstLine = require('firstline');
 const readLastLines = require('read-last-lines').read;
 const rimraf = require('rimraf');
 
+const { redactAll } = require('../js/modules/privacy');
+
 const { app, ipcMain: ipc } = electron;
 const LEVELS = ['fatal', 'error', 'warn', 'info', 'debug', 'trace'];
 let logger;
+
+const isRunningFromConsole = Boolean(process.stdout.isTTY);
 
 module.exports = {
   initialize,
@@ -38,14 +42,9 @@ function initialize() {
 
   return cleanupLogs(logPath).then(() => {
     const logFile = path.join(logPath, 'log.log');
-
-    logger = bunyan.createLogger({
+    const loggerOptions = {
       name: 'log',
       streams: [
-        {
-          level: 'debug',
-          stream: process.stdout,
-        },
         {
           type: 'rotating-file',
           path: logFile,
@@ -53,11 +52,31 @@ function initialize() {
           count: 3,
         },
       ],
-    });
+    };
+
+    if (isRunningFromConsole) {
+      loggerOptions.streams.push({
+        level: 'debug',
+        stream: process.stdout,
+      });
+    }
+
+    logger = bunyan.createLogger(loggerOptions);
 
     LEVELS.forEach(level => {
       ipc.on(`log-${level}`, (first, ...rest) => {
         logger[level](...rest);
+      });
+    });
+
+    ipc.on('batch-log', (first, batch) => {
+      batch.forEach(item => {
+        logger[item.level](
+          {
+            time: new Date(item.timestamp),
+          },
+          item.logText
+        );
       });
     });
 
@@ -102,21 +121,31 @@ async function deleteAllLogs(logPath) {
   });
 }
 
-function cleanupLogs(logPath) {
+async function cleanupLogs(logPath) {
   const now = new Date();
   const earliestDate = new Date(
     Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 3)
   );
 
-  return eliminateOutOfDateFiles(logPath, earliestDate).then(remaining => {
+  try {
+    const remaining = await eliminateOutOfDateFiles(logPath, earliestDate);
     const files = _.filter(remaining, file => !file.start && file.end);
 
     if (!files.length) {
-      return null;
+      return;
     }
 
-    return eliminateOldEntries(files, earliestDate);
-  });
+    await eliminateOldEntries(files, earliestDate);
+  } catch (error) {
+    console.error(
+      'Error cleaning logs; deleting and starting over from scratch.',
+      error.stack
+    );
+
+    // delete and re-create the log directory
+    await deleteAllLogs(logPath);
+    mkdirp.sync(logPath);
+  }
 }
 
 function isLineAfterDate(line, date) {
@@ -247,8 +276,8 @@ function logAtLevel(level, ...args) {
 
       return item;
     });
-    logger[level](str.join(' '));
-  } else {
+    logger[level](redactAll(str.join(' ')));
+  } else if (isRunningFromConsole) {
     console._log(...args);
   }
 }

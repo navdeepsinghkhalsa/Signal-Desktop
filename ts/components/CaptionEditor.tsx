@@ -3,13 +3,13 @@
 import React from 'react';
 import * as GoogleChrome from '../util/GoogleChrome';
 
-import { AttachmentType } from './conversation/types';
+import { AttachmentType } from '../types/Attachment';
 
-import { Localizer } from '../types/Util';
+import { LocalizerType } from '../types/Util';
 
 interface Props {
   attachment: AttachmentType;
-  i18n: Localizer;
+  i18n: LocalizerType;
   url: string;
   caption?: string;
   onSave?: (caption: string) => void;
@@ -21,15 +21,15 @@ interface State {
 }
 
 export class CaptionEditor extends React.Component<Props, State> {
-  private handleKeyUpBound: (
+  private readonly handleKeyDownBound: (
     event: React.KeyboardEvent<HTMLInputElement>
   ) => void;
-  private setFocusBound: () => void;
-  // TypeScript doesn't like our React.Ref typing here, so we omit it
-  private captureRefBound: () => void;
-  private onChangeBound: () => void;
-  private onSaveBound: () => void;
-  private inputRef: React.Ref<HTMLInputElement> | null;
+  private readonly setFocusBound: () => void;
+  private readonly onChangeBound: (
+    event: React.FormEvent<HTMLInputElement>
+  ) => void;
+  private readonly onSaveBound: () => void;
+  private readonly inputRef: React.RefObject<HTMLInputElement>;
 
   constructor(props: Props) {
     super(props);
@@ -39,41 +39,43 @@ export class CaptionEditor extends React.Component<Props, State> {
       caption: caption || '',
     };
 
-    this.handleKeyUpBound = this.handleKeyUp.bind(this);
+    this.handleKeyDownBound = this.handleKeyDown.bind(this);
     this.setFocusBound = this.setFocus.bind(this);
-    this.captureRefBound = this.captureRef.bind(this);
     this.onChangeBound = this.onChange.bind(this);
     this.onSaveBound = this.onSave.bind(this);
-    this.inputRef = null;
+    this.inputRef = React.createRef();
   }
 
-  public handleKeyUp(event: React.KeyboardEvent<HTMLInputElement>) {
+  public componentDidMount() {
+    // Forcing focus after a delay due to some focus contention with ConversationView
+    setTimeout(() => {
+      this.setFocus();
+    }, 200);
+  }
+
+  public handleKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
     const { close, onSave } = this.props;
 
     if (close && event.key === 'Escape') {
       close();
+
+      event.stopPropagation();
+      event.preventDefault();
     }
 
     if (onSave && event.key === 'Enter') {
       const { caption } = this.state;
       onSave(caption);
+
+      event.stopPropagation();
+      event.preventDefault();
     }
   }
 
   public setFocus() {
-    if (this.inputRef) {
-      // @ts-ignore
-      this.inputRef.focus();
+    if (this.inputRef.current) {
+      this.inputRef.current.focus();
     }
-  }
-
-  public captureRef(ref: React.Ref<HTMLInputElement>) {
-    this.inputRef = ref;
-
-    // Forcing focus after a delay due to some focus contention with ConversationView
-    setTimeout(() => {
-      this.setFocus();
-    }, 200);
   }
 
   public onSave() {
@@ -124,6 +126,7 @@ export class CaptionEditor extends React.Component<Props, State> {
   public render() {
     const { i18n, close } = this.props;
     const { caption } = this.state;
+    const onKeyDown = close ? this.handleKeyDownBound : undefined;
 
     return (
       <div
@@ -132,6 +135,7 @@ export class CaptionEditor extends React.Component<Props, State> {
         className="module-caption-editor"
       >
         <div
+          // Okay that this isn't a button; the escape key can be used to close this view
           role="button"
           onClick={close}
           className="module-caption-editor__close-button"
@@ -143,22 +147,21 @@ export class CaptionEditor extends React.Component<Props, State> {
           <div className="module-caption-editor__input-container">
             <input
               type="text"
-              ref={this.captureRefBound}
+              ref={this.inputRef}
               value={caption}
               maxLength={200}
               placeholder={i18n('addACaption')}
               className="module-caption-editor__caption-input"
-              onKeyUp={close ? this.handleKeyUpBound : undefined}
+              onKeyDown={onKeyDown}
               onChange={this.onChangeBound}
             />
             {caption ? (
-              <div
-                role="button"
+              <button
                 onClick={this.onSaveBound}
                 className="module-caption-editor__save-button"
               >
                 {i18n('save')}
-              </div>
+              </button>
             ) : null}
           </div>
         </div>

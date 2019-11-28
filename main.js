@@ -5,6 +5,7 @@ const url = require('url');
 const os = require('os');
 const fs = require('fs');
 const crypto = require('crypto');
+const qs = require('qs');
 
 const _ = require('lodash');
 const pify = require('pify');
@@ -46,6 +47,10 @@ const startInTray = process.argv.some(arg => arg === '--start-in-tray');
 const usingTrayIcon =
   startInTray || process.argv.some(arg => arg === '--use-tray-icon');
 
+const disableFlashFrame = process.argv.some(
+  arg => arg === '--disable-flash-frame'
+);
+
 const config = require('./app/config');
 
 // Very important to put before the single instance check, since it is based on the
@@ -61,8 +66,9 @@ const development = config.environment === 'development';
 //   data directory has been set.
 const attachments = require('./app/attachments');
 const attachmentChannel = require('./app/attachment_channel');
-const autoUpdate = require('./app/auto_update');
+const updater = require('./ts/updater/index');
 const createTrayIcon = require('./app/tray_icon');
+const dockIcon = require('./app/dock_icon');
 const ephemeralConfig = require('./app/ephemeral_config');
 const logging = require('./app/logging');
 const sql = require('./app/sql');
@@ -94,25 +100,29 @@ function showWindow() {
   if (tray) {
     tray.updateContextMenu();
   }
+
+  // show the app on the Dock in case it was hidden before
+  dockIcon.show();
 }
 
 if (!process.mas) {
   console.log('making app single instance');
-  const shouldQuit = app.makeSingleInstance(() => {
-    // Someone tried to run a second instance, we should focus our window
-    if (mainWindow) {
-      if (mainWindow.isMinimized()) {
-        mainWindow.restore();
-      }
-
-      showWindow();
-    }
-    return true;
-  });
-
-  if (shouldQuit) {
+  const gotLock = app.requestSingleInstanceLock();
+  if (!gotLock) {
     console.log('quitting; we are the second instance');
     app.exit();
+  } else {
+    app.on('second-instance', () => {
+      // Someone tried to run a second instance, we should focus our window
+      if (mainWindow) {
+        if (mainWindow.isMinimized()) {
+          mainWindow.restore();
+        }
+
+        showWindow();
+      }
+      return true;
+    });
   }
 }
 
@@ -148,6 +158,7 @@ function prepareURL(pathSegments, moreKeys) {
       hostname: os.hostname(),
       appInstance: process.env.NODE_APP_INSTANCE,
       proxyUrl: process.env.HTTPS_PROXY || process.env.https_proxy,
+      contentProxyUrl: config.contentProxyUrl,
       importMode: importMode ? true : undefined, // for stringify()
       serverTrustRoot: config.get('serverTrustRoot'),
       ...moreKeys,
@@ -171,7 +182,7 @@ function captureClicks(window) {
 const DEFAULT_WIDTH = 800;
 const DEFAULT_HEIGHT = 610;
 const MIN_WIDTH = 640;
-const MIN_HEIGHT = 360;
+const MIN_HEIGHT = 550;
 const BOUNDS_BUFFER = 100;
 
 function isVisible(window, bounds) {
@@ -209,23 +220,21 @@ function createWindow() {
       minWidth: MIN_WIDTH,
       minHeight: MIN_HEIGHT,
       autoHideMenuBar: false,
+      backgroundColor:
+        config.environment === 'test' || config.environment === 'test-lib'
+          ? '#ffffff' // Tests should always be rendered on a white background
+          : '#2090EA',
+      vibrancy: 'appearance-based',
       webPreferences: {
         nodeIntegration: false,
         nodeIntegrationInWorker: false,
-        // sandbox: true,
+        contextIsolation: false,
         preload: path.join(__dirname, 'preload.js'),
         nativeWindowOpen: true,
       },
       icon: path.join(__dirname, 'images', 'icon_256.png'),
     },
-    _.pick(windowConfig, [
-      'maximized',
-      'autoHideMenuBar',
-      'width',
-      'height',
-      'x',
-      'y',
-    ])
+    _.pick(windowConfig, ['autoHideMenuBar', 'width', 'height', 'x', 'y'])
   );
 
   if (!_.isNumber(windowOptions.width) || windowOptions.width < MIN_WIDTH) {
@@ -233,9 +242,6 @@ function createWindow() {
   }
   if (!_.isNumber(windowOptions.height) || windowOptions.height < MIN_HEIGHT) {
     windowOptions.height = DEFAULT_HEIGHT;
-  }
-  if (!_.isBoolean(windowOptions.maximized)) {
-    delete windowOptions.maximized;
   }
   if (!_.isBoolean(windowOptions.autoHideMenuBar)) {
     delete windowOptions.autoHideMenuBar;
@@ -254,10 +260,6 @@ function createWindow() {
     delete windowOptions.y;
   }
 
-  if (windowOptions.fullscreen === false) {
-    delete windowOptions.fullscreen;
-  }
-
   logger.info(
     'Initializing BrowserWindow config: %s',
     JSON.stringify(windowOptions)
@@ -265,6 +267,12 @@ function createWindow() {
 
   // Create the browser window.
   mainWindow = new BrowserWindow(windowOptions);
+  if (windowConfig && windowConfig.maximized) {
+    mainWindow.maximize();
+  }
+  if (windowConfig && windowConfig.fullscreen) {
+    mainWindow.setFullScreen(true);
+  }
 
   function captureAndSaveWindowStats() {
     if (!mainWindow) {
@@ -278,17 +286,12 @@ function createWindow() {
     windowConfig = {
       maximized: mainWindow.isMaximized(),
       autoHideMenuBar: mainWindow.isMenuBarAutoHide(),
+      fullscreen: mainWindow.isFullScreen(),
       width: size[0],
       height: size[1],
       x: position[0],
       y: position[1],
     };
-
-    if (mainWindow.isFullScreen()) {
-      // Only include this property if true, because when explicitly set to
-      // false the fullscreen button will be disabled on osx
-      windowConfig.fullscreen = true;
-    }
 
     logger.info(
       'Updating BrowserWindow config: %s',
@@ -300,10 +303,6 @@ function createWindow() {
   const debouncedCaptureStats = _.debounce(captureAndSaveWindowStats, 500);
   mainWindow.on('resize', debouncedCaptureStats);
   mainWindow.on('move', debouncedCaptureStats);
-
-  mainWindow.on('focus', () => {
-    mainWindow.flashFrame(false);
-  });
 
   // Ingested in preload.js via a sendSync call
   ipc.on('locale-data', event => {
@@ -360,11 +359,18 @@ function createWindow() {
         tray.updateContextMenu();
       }
 
+      // hide the app from the Dock on macOS if the tray icon is enabled
+      if (usingTrayIcon) {
+        dockIcon.hide();
+      }
+
       return;
     }
 
     await requestShutdown();
-    mainWindow.readyForShutdown = true;
+    if (mainWindow) {
+      mainWindow.readyForShutdown = true;
+    }
     app.quit();
   });
 
@@ -375,11 +381,43 @@ function createWindow() {
     // when you should delete the corresponding element.
     mainWindow = null;
   });
-
-  ipc.on('show-window', () => {
-    showWindow();
-  });
 }
+
+ipc.on('show-window', () => {
+  showWindow();
+});
+
+let isReadyForUpdates = false;
+async function readyForUpdates() {
+  if (isReadyForUpdates) {
+    return;
+  }
+
+  isReadyForUpdates = true;
+
+  // First, install requested sticker pack
+  if (process.argv.length > 1) {
+    const [incomingUrl] = process.argv;
+    if (incomingUrl.startsWith('sgnl://')) {
+      handleSgnlLink(incomingUrl);
+    }
+  }
+
+  // Second, start checking for app updates
+  try {
+    await updater.start(getMainWindow, locale.messages, logger);
+  } catch (error) {
+    logger.error(
+      'Error starting update checks:',
+      error && error.stack ? error.stack : error
+    );
+  }
+}
+
+ipc.once('ready-for-updates', readyForUpdates);
+
+const TEN_MINUTES = 10 * 60 * 1000;
+setTimeout(readyForUpdates, TEN_MINUTES);
 
 function openReleaseNotes() {
   shell.openExternal(
@@ -399,6 +437,12 @@ function openSupportPage() {
 
 function openForums() {
   shell.openExternal('https://community.signalusers.org/');
+}
+
+function showKeyboardShortcuts() {
+  if (mainWindow) {
+    mainWindow.webContents.send('show-keyboard-shortcuts');
+  }
 }
 
 function setupWithImport() {
@@ -434,11 +478,12 @@ function showAbout() {
     autoHideMenuBar: true,
     backgroundColor: '#2090EA',
     show: false,
+    vibrancy: 'appearance-based',
     webPreferences: {
       nodeIntegration: false,
       nodeIntegrationInWorker: false,
+      contextIsolation: false,
       preload: path.join(__dirname, 'about_preload.js'),
-      // sandbox: true,
       nativeWindowOpen: true,
     },
     parent: mainWindow,
@@ -469,7 +514,8 @@ async function showSettingsWindow() {
     return;
   }
 
-  const theme = await pify(getDataFromMainWindow)('theme-setting');
+  addDarkOverlay();
+
   const size = mainWindow.getSize();
   const options = {
     width: Math.min(500, size[0]),
@@ -477,14 +523,15 @@ async function showSettingsWindow() {
     resizable: false,
     title: locale.messages.signalDesktopPreferences.message,
     autoHideMenuBar: true,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#2090EA',
     show: false,
     modal: true,
+    vibrancy: 'appearance-based',
     webPreferences: {
       nodeIntegration: false,
       nodeIntegrationInWorker: false,
+      contextIsolation: false,
       preload: path.join(__dirname, 'settings_preload.js'),
-      // sandbox: true,
       nativeWindowOpen: true,
     },
     parent: mainWindow,
@@ -494,7 +541,7 @@ async function showSettingsWindow() {
 
   captureClicks(settingsWindow);
 
-  settingsWindow.loadURL(prepareURL([__dirname, 'settings.html'], { theme }));
+  settingsWindow.loadURL(prepareURL([__dirname, 'settings.html']));
 
   settingsWindow.on('closed', () => {
     removeDarkOverlay();
@@ -502,7 +549,6 @@ async function showSettingsWindow() {
   });
 
   settingsWindow.once('ready-to-show', () => {
-    addDarkOverlay();
     settingsWindow.show();
   });
 }
@@ -520,16 +566,17 @@ async function showDebugLogWindow() {
     width: Math.max(size[0] - 100, MIN_WIDTH),
     height: Math.max(size[1] - 100, MIN_HEIGHT),
     resizable: false,
-    title: locale.messages.signalDesktopPreferences.message,
+    title: locale.messages.debugLog.message,
     autoHideMenuBar: true,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#2090EA',
     show: false,
     modal: true,
+    vibrancy: 'appearance-based',
     webPreferences: {
       nodeIntegration: false,
       nodeIntegrationInWorker: false,
+      contextIsolation: false,
       preload: path.join(__dirname, 'debug_log_preload.js'),
-      // sandbox: true,
       nativeWindowOpen: true,
     },
     parent: mainWindow,
@@ -568,16 +615,17 @@ async function showPermissionsPopupWindow() {
     width: Math.min(400, size[0]),
     height: Math.min(150, size[1]),
     resizable: false,
-    title: locale.messages.signalDesktopPreferences.message,
+    title: locale.messages.allowAccess.message,
     autoHideMenuBar: true,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#2090EA',
     show: false,
     modal: true,
+    vibrancy: 'appearance-based',
     webPreferences: {
       nodeIntegration: false,
       nodeIntegrationInWorker: false,
+      contextIsolation: false,
       preload: path.join(__dirname, 'permissions_popup_preload.js'),
-      // sandbox: true,
       nativeWindowOpen: true,
     },
     parent: mainWindow,
@@ -625,24 +673,17 @@ app.on('ready', async () => {
 
   installPermissionsHandler({ session, userConfig });
 
-  let loggingSetupError;
-  try {
-    await logging.initialize();
-  } catch (error) {
-    loggingSetupError = error;
-  }
-
+  await logging.initialize();
   logger = logging.getLogger();
   logger.info('app ready');
-
-  if (loggingSetupError) {
-    logger.error('Problem setting up logging', loggingSetupError.stack);
-  }
+  logger.info(`starting version ${packageJson.version}`);
 
   if (!locale) {
     const appLocale = process.env.NODE_ENV === 'test' ? 'en' : app.getLocale();
     locale = loadLocale({ appLocale, logger });
   }
+
+  GlobalErrors.updateLocale(locale.messages);
 
   let key = userConfig.get('key');
   if (!key) {
@@ -653,7 +694,15 @@ app.on('ready', async () => {
     key = crypto.randomBytes(32).toString('hex');
     userConfig.set('key', key);
   }
-  await sql.initialize({ configDir: userDataPath, key });
+  const success = await sql.initialize({
+    configDir: userDataPath,
+    key,
+    messages: locale.messages,
+  });
+  if (!success) {
+    console.log('sql.initialize was unsuccessful; returning early');
+    return;
+  }
   await sqlChannels.initialize();
 
   try {
@@ -679,16 +728,40 @@ app.on('ready', async () => {
       userDataPath,
       attachments: orphanedAttachments,
     });
+
+    const allStickers = await attachments.getAllStickers(userDataPath);
+    const orphanedStickers = await sql.removeKnownStickers(allStickers);
+    await attachments.deleteAllStickers({
+      userDataPath,
+      stickers: orphanedStickers,
+    });
+
+    const allDraftAttachments = await attachments.getAllDraftAttachments(
+      userDataPath
+    );
+    const orphanedDraftAttachments = await sql.removeKnownDraftAttachments(
+      allDraftAttachments
+    );
+    await attachments.deleteAllDraftAttachments({
+      userDataPath,
+      stickers: orphanedDraftAttachments,
+    });
   }
 
+  try {
+    await attachments.clearTempPath(userDataPath);
+  } catch (error) {
+    logger.error(
+      'main/ready: Error deleting temp dir:',
+      error && error.stack ? error.stack : error
+    );
+  }
   await attachmentChannel.initialize({
     configDir: userDataPath,
     cleanupOrphanedAttachments,
   });
 
   ready = true;
-
-  autoUpdate.initialize(getMainWindow, locale.messages);
 
   createWindow();
 
@@ -704,6 +777,7 @@ function setupMenu(options) {
   const menuOptions = Object.assign({}, options, {
     development,
     showDebugLog: showDebugLogWindow,
+    showKeyboardShortcuts,
     showWindow,
     showAbout,
     showSettings: showSettingsWindow,
@@ -766,6 +840,7 @@ app.on('before-quit', () => {
     readyForShutdown: mainWindow ? mainWindow.readyForShutdown : null,
     shouldQuit: windowState.shouldQuit(),
   });
+
   windowState.markShouldQuit();
 });
 
@@ -806,6 +881,12 @@ app.on('web-contents-created', (createEvent, contents) => {
   });
 });
 
+app.setAsDefaultProtocolClient('sgnl');
+app.on('open-url', (event, incomingUrl) => {
+  event.preventDefault();
+  handleSgnlLink(incomingUrl);
+});
+
 ipc.on('set-badge-count', (event, count) => {
   app.setBadgeCount(count);
 });
@@ -821,11 +902,14 @@ ipc.on('add-setup-menu-items', () => {
 });
 
 ipc.on('draw-attention', () => {
-  if (process.platform === 'darwin') {
-    app.dock.bounce();
-  } else if (process.platform === 'win32') {
-    mainWindow.flashFrame(true);
-  } else if (process.platform === 'linux') {
+  if (!mainWindow) {
+    return;
+  }
+  if (disableFlashFrame) {
+    return;
+  }
+
+  if (process.platform === 'win32' || process.platform === 'linux') {
     mainWindow.flashFrame(true);
   }
 });
@@ -940,6 +1024,19 @@ ipc.on('delete-all-data', () => {
   }
 });
 
+ipc.on('get-built-in-images', async () => {
+  try {
+    const images = await attachments.getBuiltInImages();
+    mainWindow.webContents.send('get-success-built-in-images', null, images);
+  } catch (error) {
+    if (mainWindow && mainWindow.webContents) {
+      mainWindow.webContents.send('get-success-built-in-images', error.message);
+    } else {
+      console.error('Error handling get-built-in-images:', error.stack);
+    }
+  }
+});
+
 function getDataFromMainWindow(name, callback) {
   ipc.once(`get-success-${name}`, (_event, error, value) =>
     callback(error, value)
@@ -976,4 +1073,16 @@ function installSettingsSetter(name) {
       mainWindow.webContents.send(`set-${name}`, value);
     }
   });
+}
+
+function handleSgnlLink(incomingUrl) {
+  const { host: command, query } = url.parse(incomingUrl);
+  const args = qs.parse(query);
+  if (command === 'addstickers' && mainWindow && mainWindow.webContents) {
+    const { pack_id: packId, pack_key: packKeyHex } = args;
+    const packKey = Buffer.from(packKeyHex, 'hex').toString('base64');
+    mainWindow.webContents.send('show-sticker-pack', { packId, packKey });
+  } else {
+    console.error('Unhandled sgnl link');
+  }
 }

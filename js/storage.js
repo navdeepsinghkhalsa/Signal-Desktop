@@ -1,3 +1,4 @@
+/* global _ */
 /* eslint-disable more/no-then */
 
 // eslint-disable-next-line func-names
@@ -24,6 +25,10 @@
 
     items[key] = data;
     await window.Signal.Data.createOrUpdateItem(data);
+
+    if (_.has(window, ['reduxActions', 'items', 'putItemExternal'])) {
+      window.reduxActions.items.putItemExternal(key, value);
+    }
   }
 
   function get(key, defaultValue) {
@@ -41,11 +46,18 @@
 
   async function remove(key) {
     if (!ready) {
-      window.log.warn('Called storage.get before storage is ready. key:', key);
+      window.log.warn(
+        'Called storage.remove before storage is ready. key:',
+        key
+      );
     }
 
     delete items[key];
     await window.Signal.Data.removeItemById(key);
+
+    if (_.has(window, ['reduxActions', 'items', 'removeItemExternal'])) {
+      window.reduxActions.items.removeItemExternal(key);
+    }
   }
 
   function onready(callback) {
@@ -77,6 +89,16 @@
     callListeners();
   }
 
+  function getItemsState() {
+    const data = _.clone(items);
+    const ids = Object.keys(data);
+    ids.forEach(id => {
+      data[id] = data[id].value;
+    });
+
+    return data;
+  }
+
   function reset() {
     ready = false;
     items = Object.create(null);
@@ -86,6 +108,7 @@
     fetch,
     put,
     get,
+    getItemsState,
     remove,
     onready,
     reset,

@@ -3,8 +3,9 @@
 ```jsx
 <util.LeftPaneContext theme={util.theme}>
   <ConversationListItem
+    id="conversationId1"
     name="Someone 🔥 Somewhere"
-    conversationType={'direct'}
+    type={'direct'}
     phoneNumber="(202) 555-0011"
     avatarPath={util.gifObjectUrl}
     lastUpdated={Date.now() - 5 * 60 * 1000}
@@ -12,7 +13,7 @@
       text: "What's going on?",
       status: 'sent',
     }}
-    onClick={() => console.log('onClick')}
+    onClick={result => console.log('onClick', result)}
     i18n={util.i18n}
   />
 </util.LeftPaneContext>
@@ -23,8 +24,9 @@
 ```jsx
 <util.LeftPaneContext theme={util.theme}>
   <ConversationListItem
+    id="conversationId1"
     phoneNumber="(202) 555-0011"
-    conversationType={'direct'}
+    type={'direct'}
     name="Mr. Fire🔥"
     color="green"
     lastUpdated={Date.now() - 5 * 60 * 1000}
@@ -32,7 +34,29 @@
       text: 'Just a second',
       status: 'read',
     }}
-    onClick={() => console.log('onClick')}
+    onClick={result => console.log('onClick', result)}
+    i18n={util.i18n}
+  />
+</util.LeftPaneContext>
+```
+
+#### Conversation with yourself
+
+```jsx
+<util.LeftPaneContext theme={util.theme}>
+  <ConversationListItem
+    id="conversationId1"
+    isMe={true}
+    phoneNumber="(202) 555-0011"
+    type={'direct'}
+    name="Mr. Fire🔥"
+    color="green"
+    lastUpdated={Date.now() - 5 * 60 * 1000}
+    lastMessage={{
+      text: 'Just a second',
+      status: 'read',
+    }}
+    onClick={result => console.log('onClick', result)}
     i18n={util.i18n}
   />
 </util.LeftPaneContext>
@@ -44,8 +68,9 @@
 <util.LeftPaneContext theme={util.theme}>
   <div>
     <ConversationListItem
+      id="conversationId1"
       phoneNumber="(202) 555-0011"
-      conversationType={'direct'}
+      type={'direct'}
       name="Mr. Fire🔥"
       color="green"
       lastUpdated={Date.now() - 5 * 60 * 1000}
@@ -53,12 +78,13 @@
         text: 'Sending',
         status: 'sending',
       }}
-      onClick={() => console.log('onClick')}
+      onClick={result => console.log('onClick', result)}
       i18n={util.i18n}
     />
     <ConversationListItem
+      id="conversationId2"
       phoneNumber="(202) 555-0011"
-      conversationType={'direct'}
+      type={'direct'}
       name="Mr. Fire🔥"
       color="green"
       lastUpdated={Date.now() - 5 * 60 * 1000}
@@ -66,12 +92,13 @@
         text: 'Sent',
         status: 'sent',
       }}
-      onClick={() => console.log('onClick')}
+      onClick={result => console.log('onClick', result)}
       i18n={util.i18n}
     />
     <ConversationListItem
+      id="conversationId3"
       phoneNumber="(202) 555-0011"
-      conversationType={'direct'}
+      type={'direct'}
       name="Mr. Fire🔥"
       color="green"
       lastUpdated={Date.now() - 5 * 60 * 1000}
@@ -79,12 +106,13 @@
         text: 'Delivered',
         status: 'delivered',
       }}
-      onClick={() => console.log('onClick')}
+      onClick={result => console.log('onClick', result)}
       i18n={util.i18n}
     />
     <ConversationListItem
+      id="conversationId4"
       phoneNumber="(202) 555-0011"
-      conversationType={'direct'}
+      type={'direct'}
       name="Mr. Fire🔥"
       color="green"
       lastUpdated={Date.now() - 5 * 60 * 1000}
@@ -92,12 +120,13 @@
         text: 'Read',
         status: 'read',
       }}
-      onClick={() => console.log('onClick')}
+      onClick={result => console.log('onClick', result)}
       i18n={util.i18n}
     />
     <ConversationListItem
+      id="conversationId5"
       phoneNumber="(202) 555-0011"
-      conversationType={'direct'}
+      type={'direct'}
       name="Mr. Fire🔥"
       color="green"
       lastUpdated={Date.now() - 5 * 60 * 1000}
@@ -105,7 +134,7 @@
         text: 'Error',
         status: 'error',
       }}
-      onClick={() => console.log('onClick')}
+      onClick={result => console.log('onClick', result)}
       i18n={util.i18n}
     />
   </div>
@@ -118,26 +147,32 @@
 <util.LeftPaneContext theme={util.theme}>
   <div>
     <ConversationListItem
+      id="conversationId1"
       phoneNumber="(202) 555-0011"
-      conversationType={'direct'}
+      type={'direct'}
       unreadCount={4}
       lastUpdated={Date.now() - 5 * 60 * 1000}
-      isTyping={true}
-      onClick={() => console.log('onClick')}
+      typingContact={{
+        name: 'Someone Here',
+      }}
+      onClick={result => console.log('onClick', result)}
       i18n={util.i18n}
     />
   </div>
   <div>
     <ConversationListItem
+      id="conversationId2"
       phoneNumber="(202) 555-0011"
-      conversationType={'direct'}
+      type={'direct'}
       unreadCount={4}
       lastUpdated={Date.now() - 5 * 60 * 1000}
-      isTyping={true}
+      typingContact={{
+        name: 'Someone Here',
+      }}
       lastMessage={{
         status: 'read',
       }}
-      onClick={() => console.log('onClick')}
+      onClick={result => console.log('onClick', result)}
       i18n={util.i18n}
     />
   </div>
@@ -152,36 +187,39 @@
 <util.LeftPaneContext theme={util.theme}>
   <div>
     <ConversationListItem
+      id="conversationId1"
       phoneNumber="(202) 555-0011"
-      conversationType={'direct'}
+      type={'direct'}
       unreadCount={4}
       lastUpdated={Date.now() - 5 * 60 * 1000}
       lastMessage={{
         text: 'Hey there!',
       }}
-      onClick={() => console.log('onClick')}
+      onClick={result => console.log('onClick', result)}
       i18n={util.i18n}
     />
     <ConversationListItem
+      id="conversationId2"
       phoneNumber="(202) 555-0011"
-      conversationType={'direct'}
+      type={'direct'}
       unreadCount={10}
       lastUpdated={Date.now() - 5 * 60 * 1000}
       lastMessage={{
         text: 'Hey there!',
       }}
-      onClick={() => console.log('onClick')}
+      onClick={result => console.log('onClick', result)}
       i18n={util.i18n}
     />
     <ConversationListItem
+      id="conversationId3"
       phoneNumber="(202) 555-0011"
-      conversationType={'direct'}
+      type={'direct'}
       unreadCount={250}
       lastUpdated={Date.now() - 5 * 60 * 1000}
       lastMessage={{
         text: 'Hey there!',
       }}
-      onClick={() => console.log('onClick')}
+      onClick={result => console.log('onClick', result)}
       i18n={util.i18n}
     />
   </div>
@@ -193,14 +231,15 @@
 ```jsx
 <util.LeftPaneContext theme={util.theme}>
   <ConversationListItem
+    id="conversationId1"
     phoneNumber="(202) 555-0011"
-    conversationType={'direct'}
+    type={'direct'}
     isSelected={true}
     lastUpdated={Date.now() - 5 * 60 * 1000}
     lastMessage={{
       text: 'Hey there!',
     }}
-    onClick={() => console.log('onClick')}
+    onClick={result => console.log('onClick', result)}
     i18n={util.i18n}
   />
 </util.LeftPaneContext>
@@ -214,23 +253,25 @@ We don't want Jumbomoji or links.
 <util.LeftPaneContext theme={util.theme}>
   <div>
     <ConversationListItem
+      id="conversationId1"
       phoneNumber="(202) 555-0011"
-      conversationType={'direct'}
+      type={'direct'}
       lastUpdated={Date.now() - 5 * 60 * 1000}
       lastMessage={{
         text: 'Download at http://signal.org',
       }}
-      onClick={() => console.log('onClick')}
+      onClick={result => console.log('onClick', result)}
       i18n={util.i18n}
     />
     <ConversationListItem
+      id="conversationId2"
       phoneNumber="(202) 555-0011"
-      conversationType={'direct'}
+      type={'direct'}
       lastUpdated={Date.now() - 5 * 60 * 1000}
       lastMessage={{
         text: '🔥',
       }}
-      onClick={() => console.log('onClick')}
+      onClick={result => console.log('onClick', result)}
       i18n={util.i18n}
     />
   </div>
@@ -245,73 +286,79 @@ We only show one line.
 <util.LeftPaneContext theme={util.theme}>
   <div>
     <ConversationListItem
+      id="conversationId1"
       phoneNumber="(202) 555-0011"
-      conversationType={'direct'}
+      type={'direct'}
       name="Long contact name. Esquire. The third. And stuff. And more! And more!"
       lastUpdated={Date.now() - 5 * 60 * 1000}
       lastMessage={{
         text: 'Normal message',
       }}
-      onClick={() => console.log('onClick')}
+      onClick={result => console.log('onClick', result)}
       i18n={util.i18n}
     />
     <ConversationListItem
+      id="conversationId2"
       phoneNumber="(202) 555-0011"
-      conversationType={'direct'}
+      type={'direct'}
       lastUpdated={Date.now() - 5 * 60 * 1000}
       lastMessage={{
         text:
           "Long line. This is a really really really long line. Really really long. Because that's just how it is",
       }}
-      onClick={() => console.log('onClick')}
+      onClick={result => console.log('onClick', result)}
       i18n={util.i18n}
     />
     <ConversationListItem
+      id="conversationId3"
       phoneNumber="(202) 555-0011"
-      conversationType={'direct'}
+      type={'direct'}
       lastUpdated={Date.now() - 5 * 60 * 1000}
       lastMessage={{
         text:
           "Long line. This is a really really really long line. Really really long. Because that's just how it is",
         status: 'read',
       }}
-      onClick={() => console.log('onClick')}
+      onClick={result => console.log('onClick', result)}
       i18n={util.i18n}
     />
 
     <ConversationListItem
+      id="conversationId4"
       phoneNumber="(202) 555-0011"
-      conversationType={'direct'}
+      type={'direct'}
       lastUpdated={Date.now() - 5 * 60 * 1000}
       unreadCount={8}
       lastMessage={{
         text:
           "Long line. This is a really really really long line. Really really long. Because that's just how it is",
       }}
-      onClick={() => console.log('onClick')}
+      onClick={result => console.log('onClick', result)}
       i18n={util.i18n}
     />
     <ConversationListItem
+      id="conversationId5"
       phoneNumber="(202) 555-0011"
-      conversationType={'direct'}
+      type={'direct'}
       lastUpdated={Date.now() - 5 * 60 * 1000}
       lastMessage={{
         text:
           "Many lines. This is a many-line message.\nLine 2 is really exciting but it shouldn't be seen.\nLine three is even better.\nLine 4, well.",
       }}
-      onClick={() => console.log('onClick')}
+      onClick={result => console.log('onClick', result)}
       i18n={util.i18n}
     />
     <ConversationListItem
+      id="conversationId6"
       phoneNumber="(202) 555-0011"
-      conversationType={'direct'}
+      type={'direct'}
       lastUpdated={Date.now() - 5 * 60 * 1000}
       lastMessage={{
         text:
           "Many lines. This is a many-line message.\nLine 2 is really exciting but it shouldn't be seen.\nLine three is even better.\nLine 4, well.",
         status: 'delivered',
       }}
-      onClick={() => console.log('onClick')}
+      onClick={result => console.log('onClick', result)}
       i18n={util.i18n}
     />
   </div>
@@ -326,25 +373,27 @@ On platforms that show scrollbars all the time, this is true all the time.
 <util.LeftPaneContext theme={util.theme}>
   <div style={{ width: '280px' }}>
     <ConversationListItem
+      id="conversationId1"
       phoneNumber="(202) 555-0011"
-      conversationType={'direct'}
+      type={'direct'}
       name="Long contact name. Esquire. The third. And stuff. And more! And more!"
       lastUpdated={Date.now() - 5 * 60 * 1000}
       lastMessage={{
         text: 'Normal message',
       }}
-      onClick={() => console.log('onClick')}
+      onClick={result => console.log('onClick', result)}
       i18n={util.i18n}
     />
     <ConversationListItem
+      id="conversationId2"
       phoneNumber="(202) 555-0011"
-      conversationType={'direct'}
+      type={'direct'}
       lastUpdated={Date.now() - 5 * 60 * 1000}
       lastMessage={{
         text:
           "Long line. This is a really really really long line. Really really long. Because that's just how it is",
       }}
-      onClick={() => console.log('onClick')}
+      onClick={result => console.log('onClick', result)}
       i18n={util.i18n}
     />
   </div>
@@ -357,43 +406,47 @@ On platforms that show scrollbars all the time, this is true all the time.
 <util.LeftPaneContext theme={util.theme}>
   <div>
     <ConversationListItem
+      id="conversationId1"
       phoneNumber="(202) 555-0011"
-      conversationType={'direct'}
+      type={'direct'}
       lastUpdated={Date.now() - 5 * 60 * 60 * 1000}
       lastMessage={{
         text: 'Five hours ago',
       }}
-      onClick={() => console.log('onClick')}
+      onClick={result => console.log('onClick', result)}
       i18n={util.i18n}
     />
     <ConversationListItem
+      id="conversationId2"
       phoneNumber="(202) 555-0011"
-      conversationType={'direct'}
+      type={'direct'}
       lastUpdated={Date.now() - 24 * 60 * 60 * 1000}
       lastMessage={{
         text: 'One day ago',
       }}
-      onClick={() => console.log('onClick')}
+      onClick={result => console.log('onClick', result)}
       i18n={util.i18n}
     />
     <ConversationListItem
+      id="conversationId3"
       phoneNumber="(202) 555-0011"
-      conversationType={'direct'}
+      type={'direct'}
       lastUpdated={Date.now() - 7 * 24 * 60 * 60 * 1000}
       lastMessage={{
         text: 'One week ago',
       }}
-      onClick={() => console.log('onClick')}
+      onClick={result => console.log('onClick', result)}
       i18n={util.i18n}
     />
     <ConversationListItem
+      id="conversationId4"
       phoneNumber="(202) 555-0011"
-      conversationType={'direct'}
+      type={'direct'}
       lastUpdated={Date.now() - 365 * 24 * 60 * 60 * 1000}
       lastMessage={{
         text: 'One year ago',
       }}
-      onClick={() => console.log('onClick')}
+      onClick={result => console.log('onClick', result)}
       i18n={util.i18n}
     />
   </div>
@@ -406,34 +459,37 @@ On platforms that show scrollbars all the time, this is true all the time.
 <util.LeftPaneContext theme={util.theme}>
   <div>
     <ConversationListItem
+      id="conversationId1"
       name="John"
-      conversationType={'direct'}
+      type={'direct'}
       lastUpdated={null}
       lastMessage={{
         text: 'Missing last updated',
       }}
-      onClick={() => console.log('onClick')}
+      onClick={result => console.log('onClick', result)}
       i18n={util.i18n}
     />
     <ConversationListItem
+      id="conversationId2"
       name="Missing message"
-      conversationType={'direct'}
+      type={'direct'}
       lastUpdated={Date.now() - 5 * 60 * 1000}
       lastMessage={{
         text: null,
       }}
-      onClick={() => console.log('onClick')}
+      onClick={result => console.log('onClick', result)}
       i18n={util.i18n}
     />
     <ConversationListItem
+      id="conversationId3"
       phoneNumber="(202) 555-0011"
-      conversationType={'direct'}
+      type={'direct'}
       lastUpdated={Date.now() - 5 * 60 * 1000}
       lastMessage={{
         text: null,
         status: 'sent',
       }}
-      onClick={() => console.log('onClick')}
+      onClick={result => console.log('onClick', result)}
       i18n={util.i18n}
     />
   </div>
